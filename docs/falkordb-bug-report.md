@@ -1,9 +1,19 @@
 # FalkorDB bug report (draft, ready to post)
 
-Status: **not posted yet.** Before posting, search the FalkorDB GitHub issues for "Expand Into",
-"variable length" and "aggregate" in case one is already open. Post it on
-[github.com/FalkorDB/FalkorDB/issues](https://github.com/FalkorDB/FalkorDB/issues), then link it in
-the README and in `bench/NOTES.md`.
+Status: **not posted yet.** Searched the open issues on Oct 16 (night); both bugs still reproduce
+on the pinned image (5 failing cases).
+
+* **B is already known upstream. Do not open a new issue for it.** [#2972](https://github.com/FalkorDB/FalkorDB/issues/2972)
+  and [#3188](https://github.com/FalkorDB/FalkorDB/issues/3188) report the dropped `WHERE`, and the open PR
+  [#3264](https://github.com/FalkorDB/FalkorDB/pull/3264) fixes exactly our shape
+  (`MATCH (a) WHERE ... MATCH (a)-[*1..2]->(b ...)`). Post section B below as a comment on #3264
+  ("seen on a real workload, here is a minimal repro") so it counts as confirmation.
+* **A has no matching issue** (closest: [#2284](https://github.com/FalkorDB/FalkorDB/issues/2284), a different
+  collect/UNION case). Post it as a new issue on
+  [github.com/FalkorDB/FalkorDB/issues](https://github.com/FalkorDB/FalkorDB/issues) with the title below,
+  the Environment, Graph and section A.
+
+Then link both in the README and in `bench/NOTES.md`.
 
 Reproduce everything below with one command (needs only the FalkorDB container):
 
@@ -14,10 +24,10 @@ python -m scripts.repro_falkordb      # exits 1 while the bugs still reproduce
 
 ---
 
-## Title
+## Title (new issue, section A only)
 
-Planner drops bound variables: (A) nodes grouped after collect/UNWIND have no relationships,
-(B) `WHERE` on the start node is lost before a variable-length path followed by another hop
+A node grouped by an aggregation after collect/UNWIND has no relationships (silently empty traversal;
+re-binding it by `ID()` fails with "Variable not found")
 
 ## Environment
 
@@ -76,6 +86,8 @@ Error: `Variable sid not found`. The plan is only `Project <- Conditional Traver
 everything before the `NodeByIdSeek` (the UNWIND and both aggregations) has been removed.
 
 ## B. `WHERE` on the start node is dropped before a variable-length path followed by another hop
+
+*(Known upstream: post this as a comment on [#3264](https://github.com/FalkorDB/FalkorDB/pull/3264), not as a new issue.)*
 
 ```cypher
 MATCH (s0:S) WHERE s0.id = 'a'

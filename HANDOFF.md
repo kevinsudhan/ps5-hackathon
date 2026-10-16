@@ -1,7 +1,8 @@
 # Handoff: Promise Graph (Graph Hacks, Track 2)
 
-**Written Oct 16, 2026, evening of day 2.** Deadline: **Oct 18, 23:59 IST**. Submit by the evening, not at 23:50.
-Everything marked "checked" below was run on Kevin's laptop on Oct 16. If something was not run, it says so.
+**Written Oct 16, 2026, evening of day 2; updated just after midnight (Oct 17) by Shyam.** Deadline: **Oct 18, 23:59 IST**.
+Submit by the evening, not at 23:50. Everything marked "checked" was run on Kevin's laptop on Oct 16 or on
+Shyam's on Oct 17 (fresh clone). If something was not run, it says so.
 
 The product: a closed port breaks customer orders; Promise Graph shows which ones, why (a path through
 the graph), which few shipments to rescue and what that costs. Six agents hand off through FalkorDB and
@@ -16,13 +17,16 @@ remember past disruptions. Postgres + pgRouting is only the benchmark baseline. 
 | Backend (FalkorDB, agents, memory, API) | Done. 19 integration tests pass, parity script passes (checked). |
 | Frontend (2D/3D stage, prompt box, Compare, Agents, Memory, Benchmark, story) | Done. Type-checks and builds (checked). |
 | Demo rehearsal | **Passed twice in a row** through the API and once fully in the UI (checked, details below). |
-| FalkorDB bug report | Minimal repro + issue text ready. **Not posted.** |
-| Deploy | Not started. Needs accounts (FalkorDB Cloud or a VM, plus a host for the API). |
-| README final pass | Not done. Its "Status" section is stale (still says the frontend is in progress). |
-| Blog post | Not started. |
+| FalkorDB bug report | Still reproduces (checked Oct 17). **Not posted.** B is already upstream (#2972, fix PR #3264): comment there. A is new: post it. Details at the top of `docs/falkordb-bug-report.md`. |
+| Deploy | **Packaged, not hosted.** `docker compose --profile app up -d --build` runs everything on :8080 and loads the data on first start (checked from empty volumes). Hosting needs a VM with Docker (or FalkorDB Cloud + any container host): someone with an account. |
+| README final pass | Done except the demo video link and a deployment URL: status, both ways to run (one command; step by step incl. the frontend), screenshots, architecture diagram, bug section, rules checklist. |
+| Blog post | Draft in `docs/blog-post.md`, numbers checked against `bench/NOTES.md`. Needs the team's edit, then posting. |
 | Demo video | Not recorded. Proposed shot list below. |
 
 ## Get it running (Windows, about 5 minutes)
+
+Quickest (only Docker): `docker compose --profile app up -d --build`, then http://localhost:8080. For
+development (hot reload), the steps below.
 
 ```bash
 # Docker Desktop must be running first
@@ -45,6 +49,20 @@ npm --prefix frontend run dev             # http://localhost:5173
 
 The data lives in Docker volumes, so after a restart you only need `docker compose up -d`.
 `python -m scripts.load` is only needed on a fresh machine.
+
+## What changed on Oct 17 (just after midnight)
+
+* **One-command run / deploy packaging.** Root `Dockerfile` (builds the frontend, FastAPI serves it next to
+  `/api`, one origin, no CORS) and an `app` service under the compose profile `app`. On start it runs
+  `python -m scripts.load --if-missing` (new flag), so the first start loads both tenants (~12 s) and later
+  starts skip it. `backend/.env` is passed in at run time and kept out of the image (`.dockerignore`).
+* **Database ports now bind to 127.0.0.1** (healthchecks added), so a VM only exposes the app on 8080.
+  Because of that, the backend defaults are now `127.0.0.1` instead of `localhost` (`config.py`): on
+  Windows "localhost" tries IPv6 first, which cost ~2 s per FalkorDB connection and hung Postgres calls.
+  `FALKOR_USERNAME` / `FALKOR_PASSWORD` are read too, for FalkorDB Cloud.
+* **README final pass**, screenshots in `docs/screenshots/` (taken with headless Chrome at 1440x900;
+  memory was reset afterwards with `scripts.reset_demo`).
+* **Bug report re-checked** against open FalkorDB issues (see the table above), and a **blog post draft**.
 
 ## What changed on Oct 16 (evening)
 
@@ -99,10 +117,10 @@ The reset puts memory back to the 3 seeded past disruptions without reloading th
 
 | Task | Done when | Notes |
 |---|---|---|
-| **Deploy** | Public URL, or a written local-setup fallback | Check the FAQ first: is a live deployment required? Frontend is static (`npm run build`, `frontend/dist`); the API needs FalkorDB reachable (`FALKOR_HOST`/`FALKOR_PORT` env vars, `PG_DSN` for the race/compare endpoints). CORS only allows `http://localhost:5173` (`backend/promisegraph/api.py`), so add the deployed origin. |
-| **README final pass** | A judge can run it from the README alone | Update the stale Status section, add an architecture diagram and screenshots, a rules checklist, and link the posted bug report. |
-| **Post the FalkorDB bug report** | Issue link in README and bench/NOTES.md | Search existing issues first. Text is ready in `docs/falkordb-bug-report.md`. |
-| **Blog post** (AirPods side prize) | Draft in `docs/` | "What we learned racing FalkorDB against Postgres honestly". Material: `bench/NOTES.md` (findings 1-9 and the honest summary). |
+| **Deploy** | Public URL in the README | FAQ: "A live deployment is preferred"; otherwise complete local setup + a working video (the README now has both). Packaging is done: on any VM with Docker, clone and `docker compose --profile app up -d --build`, open port 8080 (DB ports are localhost-only). ~2 GB RAM is plenty. Alternative: FalkorDB Cloud + the image on Render/Railway/Fly with `FALKOR_HOST/PORT/USERNAME/PASSWORD` (and `PG_DSN`, or the engine switch, Compare and Benchmark fail). Single origin, so no CORS change needed. |
+| **README** | Video link + deployment URL filled in | Everything else done Oct 17. The rules checklist has a "link to come" for the video. |
+| **Post the FalkorDB bug report** | Issue link in README and bench/NOTES.md | Searched Oct 17: post A as a new issue, B as a comment on PR #3264 (see the top of `docs/falkordb-bug-report.md`). Needs someone's GitHub account. |
+| **Blog post** (AirPods side prize) | Posted, linked in README | Draft: `docs/blog-post.md`. Edit into the team's voice, add repo + video links, post (dev.to / Hashnode / Medium). |
 | **Record the video** (day 4) | Uploaded | Shot list below. Reset memory first. |
 | Optional: Q3 speed-up | Only if everything above is done | Tag only backbone shipments, est. ~360 ms to ~240 ms at 100k. Would only draw level with pgRouting. |
 

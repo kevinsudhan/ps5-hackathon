@@ -10,9 +10,11 @@ Pranay J Sathish, Kevin Sudhan, Manish Arunkumar, Shyam Nair.
 > All data in this repo is **synthetic**. Port, airport and city locations are real public
 > geography; every company, carrier, customer and order is made up.
 
-## Status (Oct 16, day 2)
+![Orders at risk after Singapore closes: the answer as a graph, the one-sentence answer, engine and timing](docs/screenshots/01-answer.png)
 
-Working and tested (`backend/tests`, 19 integration tests):
+## Status (Oct 17, day 3)
+
+Working and tested (`backend/tests`, 19 integration tests; demo rehearsed end to end in the UI):
 * FalkorDB + a Postgres (with pgRouting) baseline in Docker, **one isolated graph per shipper company**
   (demo tenants: Northwind Retail, 20k orders; Lumen Home Co, 3k orders).
 * A deterministic generator for a believable supply chain (4 product families, up to 5 supplier tiers,
@@ -20,15 +22,29 @@ Working and tested (`backend/tests`, 19 integration tests):
 * **Six agents that hand off through the graph** (Sentinel, Impact Analyst, Rerouter, Finance,
   Verifier, Comms), with a human approval gate, and **graph memory** they read and write:
   episodic (runs, decisions, outcomes), procedural (playbooks), shared state (decision chains).
+* The web app: every answer drawn as its own small graph (2D or 3D), a plain-English prompt with an
+  engine switch, Compare, Agents (with approval), Memory, Benchmark, and a 30-second story.
 * Exact parity: FalkorDB, Postgres and a plain-Python reference return identical rows.
 * Concurrency: 8 agent runs across 2 tenants in parallel with 8 readers, chains intact, tenants isolated.
 * A fair benchmark (below) and the HTTP API the UI uses ([`docs/api-contract.md`](docs/api-contract.md)).
+* One-command run: `docker compose --profile app up` builds the app, starts both databases and loads
+  the demo data on first start.
 
-In progress: the 2D panel and 3D view (`frontend/`), then deployment and the demo video.
+Still to do: public deployment, demo video, blog post, posting the FalkorDB bug report.
 
 ## Quick start
 
-Needs Docker and Python 3.11+.
+### Option 1: one command (needs only Docker)
+
+```bash
+docker compose --profile app up -d --build   # first start: ~2 min to build, ~20 s to load the demo data
+```
+
+Open **http://localhost:8080**. The FalkorDB Browser is on http://localhost:3300. To get Gemini wording
+(optional; numbers never come from it), put `GEMINI_API_KEY=...` in `backend/.env` before starting.
+Data lives in Docker volumes, so later starts skip the load. `docker compose --profile app down` stops it.
+
+### Option 2: development (Docker, Python 3.11+, Node 22)
 
 ```bash
 docker compose up -d                     # FalkorDB on :6379, Browser on http://localhost:3300, Postgres on :5544
@@ -41,6 +57,25 @@ python -m scripts.parity                 # prove both engines agree with the ref
 python -m pytest -q tests                # 19 integration tests (needs the containers)
 uvicorn promisegraph.api:app --port 8000 # API: http://localhost:8000/docs
 ```
+
+In a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev                              # http://localhost:5173 (forwards /api to :8000)
+```
+
+`python -m scripts.reset_demo` puts the agents' memory back to the three seeded past disruptions
+(every run adds to it).
+
+### Deploying
+
+Any machine with Docker: clone the repo, run Option 1, and open port 8080. The databases are bound to
+127.0.0.1, so only the app is reachable from outside. The image (`Dockerfile`) is the API and the built
+frontend on one origin; point it at another FalkorDB (e.g. FalkorDB Cloud) with `FALKOR_HOST`,
+`FALKOR_PORT`, `FALKOR_USERNAME` and `FALKOR_PASSWORD`, and at Postgres with `PG_DSN` (only the
+engine switch, Compare and Benchmark need it).
 
 Run the agents from the command line:
 
@@ -55,6 +90,34 @@ http://localhost:3300 and run:
 MATCH (c:Customer {name: 'Aisha Rahman'})-[:PLACED]->(o)-[:FULFILLED_BY]->(s)<-[:FEEDS*1..6]-(up)
 RETURN c, o, s, up LIMIT 50
 ```
+
+## What it looks like
+
+| | |
+|---|---|
+| ![Why is Aisha's order late: a chain from the closed port to her order](docs/screenshots/02-why.png) | ![Compare: same question on FalkorDB and PostgreSQL, same answer, both queries](docs/screenshots/03-compare.png) |
+| **Why is Aisha's order late?** The delay's path through the graph, from the closed port to her order. | **Compare:** the same question on both engines, the same 755 rows, both queries in full. |
+| ![Agents: six agents hand off through the graph and wait for a person to approve](docs/screenshots/04-agents.png) | ![Memory: past disruptions and what the agents learned from them](docs/screenshots/05-memory.png) |
+| **Agents:** each step reads the previous one from the graph; spending waits for a human. | **Memory:** past disruptions and outcomes the agents recall (Suez: air freight did not pay off). |
+| ![Benchmark: time per question as the delay is followed 2 to 8 steps](docs/screenshots/06-benchmark.png) | ![The same answer in 3D](docs/screenshots/07-3d.png) |
+| **Benchmark:** real timings as the delay is followed 2 to 8 steps along the supply chain. | **3D:** the same layout lifted into space; orders orbit the shipment they wait on. |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  UI["Web app<br/>React + Vite"] -->|"/api"| API["FastAPI<br/>promisegraph.api"]
+  API --> Q["Prompt box<br/>nl.py + questions.py<br/>whitelisted templates"]
+  API --> AG["Six agents<br/>agents.py + memory.py"]
+  Q -->|Cypher| FK[("FalkorDB<br/>one graph per company:<br/>supply chain + agent memory")]
+  AG -->|"Cypher, algo.WCC,<br/>betweenness, SPpaths"| FK
+  AG -.->|"wording only,<br/>numbers checked"| LLM["Gemini<br/>(optional)"]
+  Q -.->|"SQL twin, only for the<br/>engine switch / Compare / Benchmark"| PG[("Postgres + pgRouting<br/>baseline")]
+```
+
+Every agent writes a `Decision` node chained to the previous one and reads its input back from the
+graph, so the handoff, the audit trail and the memory the next run recalls are the same nodes. In
+production the API also serves the built frontend, so the whole app is one container on one origin.
 
 ## Ask in plain English, on either engine
 
@@ -155,8 +218,9 @@ What this honestly means:
   the impacted shipments before calling it (see [`bench/NOTES.md`](bench/NOTES.md)). FalkorDB is
   9-124x faster than plain recursive SQL, but that is not the fair baseline, so we do not lead with it.
 * On chokepoints, `algo.betweenness` and `pgr_betweennessCentrality` give every hub the same score
-  and take about the same time (~4 ms). Our shipped query uses FalkorDB's default of sampling 32 of the
-  121 hubs, so it is approximate (9 of the true top 10, in a different order); exact costs ~1-2 ms more. (Fixed Oct 16: the shipped query now samples every hub, so it is exact.)
+  and take about the same time (~4 ms). FalkorDB's default samples only 32 of the 121 hubs, which is
+  approximate (9 of the true top 10, in a different order), so the shipped query samples every hub and
+  is exact, for ~1-2 ms more.
 * On reroutes, FalkorDB is a little faster (1.1-1.9x in total) **only because the product caps routes at
   7 lanes**: `algo.SPpaths` has that cap built in, `pgr_KSP` does not, so the baseline keeps asking for
   more paths until 20 short ones are in. Remove the cap and pgRouting is 11-21x faster, while FalkorDB
@@ -165,9 +229,35 @@ What this honestly means:
 ## Why FalkorDB is load-bearing (Rule 3)
 
 Remove FalkorDB and nothing works: every product endpoint, every agent tool and the agent memory run
-on Cypher and FalkorDB graph algorithms. Postgres is used **only** by the benchmark scripts and the
-`/race` endpoint that powers the on-screen engine scoreboard; its queries exist purely to compare
-against (cascade, two clusters baselines, and pgRouting chokepoint/reroute baselines).
+on Cypher and FalkorDB graph algorithms. Postgres is used **only** to compare against: the benchmark
+scripts and the race features in the UI (the engine switch, Compare and Benchmark, served by `/ask`
+with `engine=postgres`, `/compare`, `/sweep` and `/race`). Its queries are SQL twins of the product's
+Cypher (cascade, two clusters baselines, and pgRouting chokepoint/reroute baselines). Agents and
+memory never touch it.
+
+## FalkorDB bugs we hit
+
+Two planner bugs made queries return **no rows, silently**, inside the cascade and the "why is this order
+late" path. The parity test against Postgres and a plain-Python reference caught both (FalkorDB 0 rows,
+the others 1,240 and 2). The product uses workarounds that plan correctly. Minimal repro:
+`python -m scripts.repro_falkordb` (from `backend/`; exits 1 while they reproduce). Write-up:
+[`docs/falkordb-bug-report.md`](docs/falkordb-bug-report.md). One of them is already known upstream
+([FalkorDB#2972](https://github.com/FalkorDB/FalkorDB/issues/2972), fix in progress in
+[FalkorDB#3264](https://github.com/FalkorDB/FalkorDB/pull/3264)); the other is new.
+
+## Rules checklist
+
+| Rule | Where |
+|---|---|
+| FalkorDB is the primary database and the product breaks without it | [Why FalkorDB is load-bearing](#why-falkordb-is-load-bearing-rule-3) |
+| Allowed data only | Everything is synthetic (`backend/promisegraph/datagen.py`); real geography only |
+| Public repo, README with setup instructions | [Quick start](#quick-start) (one command, or step by step) |
+| Graph data model | [Graph data model](#graph-data-model), full: [`docs/graph-model.md`](docs/graph-model.md) |
+| Cypher queries and graph algorithms | [Queries and algorithms](#queries-and-algorithms-the-product-depends-on), all of them: [`docs/queries.md`](docs/queries.md) |
+| Live deployment, or complete local setup | [Deploying](#deploying) / [Option 1](#option-1-one-command-needs-only-docker) |
+| Demo video | *link to come* |
+| Track | Track 2: Agent Memory and Coordination |
+| AI tools disclosed | [Disclosure](#disclosure) |
 
 ## Disclosure
 
@@ -184,14 +274,18 @@ against (cascade, two clusters baselines, and pgRouting chokepoint/reroute basel
 ## Repo layout
 
 ```
-docker-compose.yml          FalkorDB (product) + Postgres with pgRouting (benchmark baseline only)
+docker-compose.yml          FalkorDB (product) + Postgres with pgRouting (benchmark baseline only);
+                            profile "app" adds the app container
+Dockerfile                  the app: built frontend + API in one image, loads the demo data on first start
 backend/promisegraph/       datagen.py, world.py, falkor_store.py (product queries), questions.py + nl.py
                             (prompt box: whitelisted templates, Cypher/SQL twins), story.py, memory.py (agent memory),
                             agents.py (the six agents), views.py (graph views for the UI), llm.py (wording only),
                             history.py (seeded synthetic history), api.py, pg_store.py (baseline only)
-backend/scripts/            load.py, parity.py, bench.py, concurrency.py, export_queries.py
+backend/scripts/            load.py, parity.py, bench.py, concurrency.py, export_queries.py, reset_demo.py,
+                            repro_falkordb.py
 backend/tests/              integration tests (parity, agents, views, LLM guard)
-docs/                       graph-model.md, queries.md, api-contract.md, TASKS.md
+docs/                       graph-model.md, queries.md, api-contract.md, TASKS.md, falkordb-bug-report.md,
+                            screenshots/
 bench/                      results and NOTES.md
 frontend/                   React + Vite app (2D panel, engine scoreboard, 3D view)
 ```

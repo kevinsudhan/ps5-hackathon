@@ -1,6 +1,6 @@
 # Task board
 
-Updated Oct 16 (day 2), evening. Full state and gotchas: [`HANDOFF.md`](../HANDOFF.md). Deadline: **Oct 18, 23:59 IST; submit by the evening, not at 23:50.**
+Updated Oct 17 (day 3), just after midnight. Full state and gotchas: [`HANDOFF.md`](../HANDOFF.md). Deadline: **Oct 18, 23:59 IST; submit by the evening, not at 23:50.**
 
 ## Done
 
@@ -16,16 +16,20 @@ Updated Oct 16 (day 2), evening. Full state and gotchas: [`HANDOFF.md`](../HANDO
   shipment names, hub codes in agent/memory text and the top bar overflowing on narrow windows;
   FalkorDB bugs reduced to a minimal repro (`python -m scripts.repro_falkordb`) with the issue text in
   `docs/falkordb-bug-report.md`.
+* Oct 17, just after midnight (Shyam): one-command run and deploy packaging (`Dockerfile`, compose
+  profile `app`, data loads on first start; checked from empty volumes); README final pass (status,
+  quick start incl. frontend, screenshots, architecture, bug section, rules checklist); bug report
+  checked against open issues; blog post draft (`docs/blog-post.md`).
 
 ## Day 3 (Oct 17): put a name on each line at standup
 
 | Owner | Task | Done when |
 |---|---|---|
 | done | ~~**Demo rehearsal on the real UI**~~ (Oct 16; run `python -m scripts.reset_demo` before recording) | Whole story runs twice in a row without a reload |
-| ? | **Deploy**: FalkorDB Cloud or a small VM with Docker; API on Render or similar; frontend static. Check the FAQ: is a live deployment required? | Public URL, or written local-setup fallback |
-| ? | **README final pass**: architecture diagram, screenshots, the honest benchmark table, rules checklist | A judge can run it from the README alone |
-| ? | **FalkorDB bug report**: repro and text ready (`docs/falkordb-bug-report.md`), **post it** | Posted on FalkorDB GitHub/Discord, link in README |
-| ? | **Blog post** (AirPods side prize): "what we learned racing FalkorDB against Postgres honestly" | Draft in docs/ |
+| ? | **Deploy**: packaging done; needs a host. VM with Docker: `docker compose --profile app up -d --build`, open 8080 (FAQ: live deployment "preferred", not required) | Public URL in the README |
+| done | ~~**README final pass**~~ (Oct 17); only the video link and deployment URL are left | A judge can run it from the README alone |
+| ? | **FalkorDB bug report**: post A as a new issue, B as a comment on PR #3264 (see `docs/falkordb-bug-report.md`) | Posted, link in README |
+| ? | **Blog post** (AirPods side prize): draft in `docs/blog-post.md`; edit and post | Posted, link in README |
 | ? | Optional: speed up Q3 by tagging only backbone shipments (estimate: ~360 ms -> ~240 ms at 100k; would only draw level with pgRouting) | Only if everything above is done |
 
 ## Day 4 (Oct 18)
