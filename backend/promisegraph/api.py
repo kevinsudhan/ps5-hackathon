@@ -4,14 +4,20 @@
 
 Everything here runs on FalkorDB except /race, which also runs the Postgres BASELINE so the
 UI can show the engine scoreboard. The product does not fall back to Postgres anywhere.
+
+When the frontend has been built (frontend/dist, or STATIC_DIR), this app serves it too, so a
+deployment is one process on one origin (see the Dockerfile).
 """
 from __future__ import annotations
 
+import os
 import time
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import agents, memory, nl, questions, story, views
@@ -286,3 +292,9 @@ def recall(tenant: str, event_id: str):
     g = _graph(tenant)
     _event_exists(g, event_id)
     return {"recall": memory.recall(g, event_id), "playbooks": memory.playbooks(g, event_id)}
+
+
+# Mounted last so every /api route above wins.
+WEB_DIST = Path(os.getenv("STATIC_DIR", Path(__file__).resolve().parents[2] / "frontend" / "dist"))
+if WEB_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")

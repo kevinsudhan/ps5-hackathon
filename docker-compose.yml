@@ -1,13 +1,22 @@
 # FalkorDB is the product's database. Postgres exists ONLY as the benchmark
 # baseline ("race mode"): same synthetic data, same questions, fair indexes.
+#
+#   docker compose up -d                       # databases only (development: run API + Vite yourself)
+#   docker compose --profile app up -d --build # everything, the app on http://localhost:8080
+#
+# Database ports are bound to 127.0.0.1 so a deployment on a public VM only exposes the app.
 services:
   falkordb:
     image: falkordb/falkordb@sha256:107455e862a824e45e8e9f5a7fbfdf5e00a08b14e13eae2577c72fd9e3f59ba6
     ports:
-      - "6379:6379"   # our code
-      - "3300:3000"   # FalkorDB Browser (live graph view) -> http://localhost:3300
+      - "127.0.0.1:6379:6379"   # our code
+      - "127.0.0.1:3300:3000"   # FalkorDB Browser (live graph view) -> http://localhost:3300
     volumes:
       - falkor-data:/var/lib/falkordb/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      retries: 20
 
   postgres:
     # Postgres 16 + pgRouting 3.8, so the clusters baseline can use pgr_connectedComponents
@@ -18,11 +27,36 @@ services:
       POSTGRES_PASSWORD: promise
       POSTGRES_DB: promise
     ports:
-      - "5544:5432"   # 5544 on the host so it never clashes with a local Postgres
+      - "127.0.0.1:5544:5432"   # 5544 on the host so it never clashes with a local Postgres
     volumes:
       # Own volume: this image is Postgres 16.9 on Debian 11, the old postgres:16 volume was
       # initialised by 16.15 on Debian 13 (different glibc collations). Data is regenerated anyway.
       - pg-routing-data:/var/lib/postgresql/data
+    healthcheck:
+      # Over TCP: during first-time init the temporary server only listens on the socket.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "promise", "-d", "promise"]
+      interval: 3s
+      retries: 20
+
+  app:
+    # API + built frontend (see Dockerfile). Loads the demo data on first start.
+    profiles: ["app"]
+    build: .
+    environment:
+      FALKOR_HOST: falkordb
+      FALKOR_PORT: "6379"
+      PG_DSN: postgresql://promise:promise@postgres:5432/promise
+    env_file:
+      - path: backend/.env      # optional GEMINI_API_KEY; never baked into the image
+        required: false
+    ports:
+      - "8080:8000"
+    depends_on:
+      falkordb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   falkor-data:

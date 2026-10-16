@@ -1,0 +1,12 @@
+.git
+.claude
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+frontend/dist
+# Secrets stay out of the image; compose passes backend/.env in at run time.
+**/.env
+bench
+docs

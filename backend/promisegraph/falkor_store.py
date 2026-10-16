@@ -10,7 +10,7 @@ from collections import defaultdict
 
 from falkordb import FalkorDB
 
-from .config import FALKOR_HOST, FALKOR_PORT, graph_name
+from .config import FALKOR_HOST, FALKOR_PASSWORD, FALKOR_PORT, FALKOR_USERNAME, graph_name
 from .datagen import Dataset
 
 BATCH = 5000
@@ -32,7 +32,7 @@ def ensure_indexes(g):
 
 
 def connect() -> FalkorDB:
-    return FalkorDB(host=FALKOR_HOST, port=FALKOR_PORT)
+    return FalkorDB(host=FALKOR_HOST, port=FALKOR_PORT, username=FALKOR_USERNAME, password=FALKOR_PASSWORD)
 
 
 def graph(tenant: str, db: FalkorDB | None = None):
