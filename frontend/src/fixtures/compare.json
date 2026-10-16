@@ -1,0 +1,24 @@
+{
+ "same_answer": true,
+ "row_count": 755,
+ "falkordb": {
+  "engine": "falkordb",
+  "text": "MATCH (e:Event {id: $event})-[:AFFECTS]->(h:Hub)\nWITH e, [(h)<-[:TO]-(l:Leg) WHERE l.arrive_day >= e.start_day AND l.arrive_day <= e.end_day | [l, l.arrive_day]]\n      + [(h)<-[:FROM]-(l:Leg) WHERE l.depart_day >= e.start_day AND l.depart_day <= e.end_day | [l, l.depart_day]]\n      AS touches\nUNWIND touches AS touch\nWITH e, touch[0] AS l, touch[1] AS t\nMATCH (l)<-[:USES]-(s0:Shipment)\nWITH ID(s0) AS sid, max(e.end_day + e.backlog_days - t + 1) AS d0\nMATCH (s0) WHERE ID(s0) = sid\nMATCH p = (s0)-[:FEEDS*0..8]->(s:Shipment)\nWITH s, length(p) AS hops,\n     reduce(d = d0, f IN relationships(p) |\n            CASE WHEN d > f.buffer_days THEN d - f.buffer_days ELSE 0 END) AS delay\nWHERE delay > 0\nWITH s, max(delay) AS delay, min(hops) AS hops\n\nMATCH (s)<-[:FULFILLED_BY]-(o:Order)-[:HAS_PROMISE]->(pr:Promise {status: 'active'})\nWITH pr, o, s, delay, hops, s.eta_day + delay - pr.due_day AS days_late\nWHERE days_late > 0\nRETURN pr.id, o.id, s.id, delay, hops, days_late, days_late * pr.penalty_per_day",
+  "params": {
+   "event": "EV-SGSIN-1020"
+  },
+  "chars": 1003,
+  "lines": 20,
+  "ms": 36.96
+ },
+ "postgres": {
+  "engine": "postgres",
+  "text": "WITH RECURSIVE\nhit AS (\n    SELECT x.shipment_id AS sid, MAX(e.end_day + e.backlog_days - x.t + 1) AS d0\n    FROM event e\n    JOIN affects a ON a.event_id = e.id\n    CROSS JOIN LATERAL (\n        SELECT l.shipment_id, l.arrive_day AS t FROM leg l\n        WHERE l.to_hub = a.hub_id AND l.arrive_day BETWEEN e.start_day AND e.end_day\n        UNION ALL\n        SELECT l.shipment_id, l.depart_day FROM leg l\n        WHERE l.from_hub = a.hub_id AND l.depart_day BETWEEN e.start_day AND e.end_day\n    ) x\n    WHERE e.id = %(event)s\n    GROUP BY x.shipment_id\n),\ncascade (sid, delay, hops) AS (\n    SELECT sid, d0, 0 FROM hit\n    UNION\n    SELECT f.dst, c.delay - f.buffer_days, c.hops + 1\n    FROM cascade c\n    JOIN feeds f ON f.src = c.sid\n    WHERE c.hops < %(depth)s AND c.delay - f.buffer_days > 0\n),\nworst AS (\n    SELECT sid, MAX(delay) AS delay, MIN(hops) AS hops FROM cascade GROUP BY sid\n)\nSELECT p.id, o.id, w.sid, w.delay, w.hops,\n       s.eta_day + w.delay - p.due_day AS days_late,\n       (s.eta_day + w.delay - p.due_day) * p.penalty_per_day AS penalty\nFROM worst w\nJOIN shipment s ON s.id = w.sid\nJOIN fulfilled_by fb ON fb.shipment_id = w.sid\nJOIN orders o ON o.id = fb.order_id\nJOIN promise p ON p.order_id = o.id\nWHERE p.status = 'active' AND s.eta_day + w.delay > p.due_day",
+  "params": {
+   "event": "EV-SGSIN-1020"
+  },
+  "chars": 1286,
+  "lines": 35,
+  "ms": 32.26
+ }
+}

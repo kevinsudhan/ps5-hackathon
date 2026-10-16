@@ -1,0 +1,26 @@
+[
+ {
+  "label": "Orders at risk",
+  "question": "Which orders are at risk because Singapore closed?"
+ },
+ {
+  "label": "Why is Aisha's order late?",
+  "question": "Why is Aisha Rahman's order late?"
+ },
+ {
+  "label": "What to rescue first",
+  "question": "Which shipments should we rescue first?"
+ },
+ {
+  "label": "Ports everything depends on",
+  "question": "Which ports does everything depend on?"
+ },
+ {
+  "label": "Seattle orders at risk",
+  "question": "Which Seattle orders are at risk?"
+ },
+ {
+  "label": "Route around Singapore",
+  "question": "How do we get goods from Ho Chi Minh City to Venlo without Singapore?"
+ }
+]

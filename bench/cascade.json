@@ -1,0 +1,227 @@
+{
+  "meta": {
+    "event": "EV-SGSIN-1020",
+    "supply_tiers": 5,
+    "runs": 9,
+    "machine": "Windows AMD64, AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD",
+    "note": "Both engines in Docker on the same machine, default configs. Postgres has full indexes + ANALYZE. Medians after 2 warm-ups. Rows verified identical."
+  },
+  "results": [
+    {
+      "orders": 5000,
+      "depth": 0,
+      "at_risk": 0,
+      "falkordb_wall_ms": 1.91,
+      "postgres_wall_ms": 2.35,
+      "falkordb_server_ms": 0.59,
+      "postgres_server_ms": 0.71
+    },
+    {
+      "orders": 5000,
+      "depth": 1,
+      "at_risk": 0,
+      "falkordb_wall_ms": 2.22,
+      "postgres_wall_ms": 2.0,
+      "falkordb_server_ms": 0.65,
+      "postgres_server_ms": 1.21
+    },
+    {
+      "orders": 5000,
+      "depth": 2,
+      "at_risk": 0,
+      "falkordb_wall_ms": 2.03,
+      "postgres_wall_ms": 2.15,
+      "falkordb_server_ms": 0.68,
+      "postgres_server_ms": 1.75
+    },
+    {
+      "orders": 5000,
+      "depth": 3,
+      "at_risk": 0,
+      "falkordb_wall_ms": 2.15,
+      "postgres_wall_ms": 2.85,
+      "falkordb_server_ms": 0.76,
+      "postgres_server_ms": 2.35
+    },
+    {
+      "orders": 5000,
+      "depth": 4,
+      "at_risk": 256,
+      "falkordb_wall_ms": 7.28,
+      "postgres_wall_ms": 8.32,
+      "falkordb_server_ms": 4.28,
+      "postgres_server_ms": 8.01
+    },
+    {
+      "orders": 5000,
+      "depth": 5,
+      "at_risk": 259,
+      "falkordb_wall_ms": 13.48,
+      "postgres_wall_ms": 8.49,
+      "falkordb_server_ms": 9.85,
+      "postgres_server_ms": 8.73
+    },
+    {
+      "orders": 5000,
+      "depth": 6,
+      "at_risk": 259,
+      "falkordb_wall_ms": 14.18,
+      "postgres_wall_ms": 8.7,
+      "falkordb_server_ms": 10.55,
+      "postgres_server_ms": 8.42
+    },
+    {
+      "orders": 5000,
+      "depth": 7,
+      "at_risk": 259,
+      "falkordb_wall_ms": 14.39,
+      "postgres_wall_ms": 8.7,
+      "falkordb_server_ms": 10.88,
+      "postgres_server_ms": 9.54
+    },
+    {
+      "orders": 20000,
+      "depth": 0,
+      "at_risk": 0,
+      "falkordb_wall_ms": 3.03,
+      "postgres_wall_ms": 4.08,
+      "falkordb_server_ms": 1.52,
+      "postgres_server_ms": 2.05
+    },
+    {
+      "orders": 20000,
+      "depth": 1,
+      "at_risk": 0,
+      "falkordb_wall_ms": 3.07,
+      "postgres_wall_ms": 3.88,
+      "falkordb_server_ms": 1.7,
+      "postgres_server_ms": 4.56
+    },
+    {
+      "orders": 20000,
+      "depth": 2,
+      "at_risk": 1240,
+      "falkordb_wall_ms": 21.56,
+      "postgres_wall_ms": 25.36,
+      "falkordb_server_ms": 10.79,
+      "postgres_server_ms": 24.32
+    },
+    {
+      "orders": 20000,
+      "depth": 3,
+      "at_risk": 1240,
+      "falkordb_wall_ms": 22.69,
+      "postgres_wall_ms": 27.54,
+      "falkordb_server_ms": 11.43,
+      "postgres_server_ms": 27.05
+    },
+    {
+      "orders": 20000,
+      "depth": 4,
+      "at_risk": 1562,
+      "falkordb_wall_ms": 34.67,
+      "postgres_wall_ms": 33.67,
+      "falkordb_server_ms": 15.52,
+      "postgres_server_ms": 33.89
+    },
+    {
+      "orders": 20000,
+      "depth": 5,
+      "at_risk": 1567,
+      "falkordb_wall_ms": 36.37,
+      "postgres_wall_ms": 34.97,
+      "falkordb_server_ms": 20.58,
+      "postgres_server_ms": 37.02
+    },
+    {
+      "orders": 20000,
+      "depth": 6,
+      "at_risk": 1567,
+      "falkordb_wall_ms": 41.69,
+      "postgres_wall_ms": 37.14,
+      "falkordb_server_ms": 21.87,
+      "postgres_server_ms": 38.84
+    },
+    {
+      "orders": 20000,
+      "depth": 7,
+      "at_risk": 1567,
+      "falkordb_wall_ms": 42.94,
+      "postgres_wall_ms": 37.13,
+      "falkordb_server_ms": 21.73,
+      "postgres_server_ms": 40.19
+    },
+    {
+      "orders": 100000,
+      "depth": 0,
+      "at_risk": 0,
+      "falkordb_wall_ms": 9.04,
+      "postgres_wall_ms": 3.45,
+      "falkordb_server_ms": 6.76,
+      "postgres_server_ms": 0.32
+    },
+    {
+      "orders": 100000,
+      "depth": 1,
+      "at_risk": 0,
+      "falkordb_wall_ms": 9.21,
+      "postgres_wall_ms": 9.12,
+      "falkordb_server_ms": 6.96,
+      "postgres_server_ms": 11.73
+    },
+    {
+      "orders": 100000,
+      "depth": 2,
+      "at_risk": 3008,
+      "falkordb_wall_ms": 68.73,
+      "postgres_wall_ms": 109.3,
+      "falkordb_server_ms": 36.18,
+      "postgres_server_ms": 110.28
+    },
+    {
+      "orders": 100000,
+      "depth": 3,
+      "at_risk": 3165,
+      "falkordb_wall_ms": 84.11,
+      "postgres_wall_ms": 125.57,
+      "falkordb_server_ms": 43.57,
+      "postgres_server_ms": 130.14
+    },
+    {
+      "orders": 100000,
+      "depth": 4,
+      "at_risk": 4100,
+      "falkordb_wall_ms": 122.46,
+      "postgres_wall_ms": 181.88,
+      "falkordb_server_ms": 69.6,
+      "postgres_server_ms": 169.3
+    },
+    {
+      "orders": 100000,
+      "depth": 5,
+      "at_risk": 4500,
+      "falkordb_wall_ms": 165.5,
+      "postgres_wall_ms": 192.02,
+      "falkordb_server_ms": 83.14,
+      "postgres_server_ms": 196.38
+    },
+    {
+      "orders": 100000,
+      "depth": 6,
+      "at_risk": 4500,
+      "falkordb_wall_ms": 159.31,
+      "postgres_wall_ms": 198.37,
+      "falkordb_server_ms": 83.72,
+      "postgres_server_ms": 215.97
+    },
+    {
+      "orders": 100000,
+      "depth": 7,
+      "at_risk": 4500,
+      "falkordb_wall_ms": 145.8,
+      "postgres_wall_ms": 207.77,
+      "falkordb_server_ms": 87.94,
+      "postgres_server_ms": 211.47
+    }
+  ]
+}

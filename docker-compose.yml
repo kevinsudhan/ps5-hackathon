@@ -1,0 +1,29 @@
+# FalkorDB is the product's database. Postgres exists ONLY as the benchmark
+# baseline ("race mode"): same synthetic data, same questions, fair indexes.
+services:
+  falkordb:
+    image: falkordb/falkordb@sha256:107455e862a824e45e8e9f5a7fbfdf5e00a08b14e13eae2577c72fd9e3f59ba6
+    ports:
+      - "6379:6379"   # our code
+      - "3300:3000"   # FalkorDB Browser (live graph view) -> http://localhost:3300
+    volumes:
+      - falkor-data:/var/lib/falkordb/data
+
+  postgres:
+    # Postgres 16 + pgRouting 3.8, so the clusters baseline can use pgr_connectedComponents
+    # (a fair judge would compare FalkorDB's algo.WCC against that, not only against SQL).
+    image: pgrouting/pgrouting:16-3.5-3.8.0@sha256:4c480c7f9e25a3490573cd6ef86b286fd21162e288cc355e8da2b52518ef6ab8
+    environment:
+      POSTGRES_USER: promise
+      POSTGRES_PASSWORD: promise
+      POSTGRES_DB: promise
+    ports:
+      - "5544:5432"   # 5544 on the host so it never clashes with a local Postgres
+    volumes:
+      # Own volume: this image is Postgres 16.9 on Debian 11, the old postgres:16 volume was
+      # initialised by 16.15 on Debian 13 (different glibc collations). Data is regenerated anyway.
+      - pg-routing-data:/var/lib/postgresql/data
+
+volumes:
+  falkor-data:
+  pg-routing-data:

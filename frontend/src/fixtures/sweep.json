@@ -1,0 +1,56 @@
+{
+ "event_id": "EV-SGSIN-1020",
+ "tenant": "northwind",
+ "runs_per_point": 3,
+ "points": [
+  {
+   "depth": 2,
+   "same_answer": true,
+   "row_count": 471,
+   "falkordb_ms": 18.5,
+   "postgres_ms": 24.22
+  },
+  {
+   "depth": 3,
+   "same_answer": true,
+   "row_count": 471,
+   "falkordb_ms": 15.2,
+   "postgres_ms": 21.78
+  },
+  {
+   "depth": 4,
+   "same_answer": true,
+   "row_count": 737,
+   "falkordb_ms": 25.95,
+   "postgres_ms": 28.58
+  },
+  {
+   "depth": 5,
+   "same_answer": true,
+   "row_count": 755,
+   "falkordb_ms": 27.5,
+   "postgres_ms": 28.97
+  },
+  {
+   "depth": 6,
+   "same_answer": true,
+   "row_count": 755,
+   "falkordb_ms": 23.8,
+   "postgres_ms": 29.68
+  },
+  {
+   "depth": 7,
+   "same_answer": true,
+   "row_count": 755,
+   "falkordb_ms": 29.08,
+   "postgres_ms": 28.69
+  },
+  {
+   "depth": 8,
+   "same_answer": true,
+   "row_count": 755,
+   "falkordb_ms": 27.28,
+   "postgres_ms": 28.79
+  }
+ ]
+}
