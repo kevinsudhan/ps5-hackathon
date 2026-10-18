@@ -1,0 +1,260 @@
+1
+00:00:00,600 --> 00:00:03,284
+Every order a company ships comes with a promise:
+
+2
+00:00:03,284 --> 00:00:04,161
+a delivery date.
+
+3
+00:00:04,481 --> 00:00:07,831
+Aisha Rahman in Liverpool was promised hers by December 14th.
+
+4
+00:00:08,481 --> 00:00:11,683
+On October 20th, a cyber incident shuts the terminals at the
+
+5
+00:00:11,683 --> 00:00:12,643
+Port of Singapore.
+
+6
+00:00:12,963 --> 00:00:14,831
+Her parcel never goes near Singapore.
+
+7
+00:00:14,831 --> 00:00:15,942
+It will still be late.
+
+8
+00:00:16,692 --> 00:00:18,644
+Radio modules get stuck at the port.
+
+9
+00:00:18,644 --> 00:00:21,898
+The circuit boards waiting on them slip, then the smart home
+
+10
+00:00:21,898 --> 00:00:24,447
+devices, the warehouse restock, and her parcel.
+
+11
+00:00:24,767 --> 00:00:26,971
+Four steps down the chain, she's three days late.
+
+12
+00:00:27,291 --> 00:00:32,543
+Across the network: 755 late orders, $114,000 in fees, and
+
+13
+00:00:32,543 --> 00:00:34,535
+nobody sees it coming.
+
+14
+00:00:35,785 --> 00:00:36,954
+This is Promise Graph.
+
+15
+00:00:37,274 --> 00:00:40,695
+It finds every broken promise, works out what to rescue, and
+
+16
+00:00:40,695 --> 00:00:43,033
+runs AI agents that remember what worked.
+
+17
+00:00:44,283 --> 00:00:46,127
+Underneath is a FalkorDB graph:
+
+18
+00:00:46,127 --> 00:00:49,755
+ports, lanes, shipments that feed each other, and orders with
+
+19
+00:00:49,755 --> 00:00:50,290
+promises.
+
+20
+00:00:50,610 --> 00:00:52,458
+A closed port is a starting node.
+
+21
+00:00:52,458 --> 00:00:55,369
+The damage is a path, and one Cypher query walks it.
+
+22
+00:00:57,819 --> 00:01:00,912
+Ask in plain English, and you get one sentence and a graph of
+
+23
+00:01:00,912 --> 00:01:01,977
+only what answers it.
+
+24
+00:01:02,297 --> 00:01:04,465
+The AI only picks a question template.
+
+25
+00:01:04,465 --> 00:01:06,234
+Every number comes from Cypher.
+
+26
+00:01:08,285 --> 00:01:10,381
+See it on the globe, or step by step:
+
+27
+00:01:10,381 --> 00:01:13,779
+what FalkorDB walked, how long it took, and the exact query.
+
+28
+00:01:16,529 --> 00:01:18,099
+Ask why Aisha's order is late:
+
+29
+00:01:18,099 --> 00:01:21,343
+the chain back to the port, then the same chain on a calendar.
+
+30
+00:01:24,793 --> 00:01:28,092
+Or ask for the costliest orders, what to rescue first, or a way
+
+31
+00:01:28,092 --> 00:01:28,930
+around the port.
+
+32
+00:01:31,980 --> 00:01:35,176
+Then six AI agents take over, and they coordinate through the
+
+33
+00:01:35,176 --> 00:01:35,490
+graph.
+
+34
+00:01:35,810 --> 00:01:39,601
+Sentinel recalls similar disruptions, the Impact Analyst traces
+
+35
+00:01:39,601 --> 00:01:43,092
+the damage, the Rerouter finds routes, Finance prices each
+
+36
+00:01:43,092 --> 00:01:45,860
+rescue, and the Verifier rechecks the numbers.
+
+37
+00:01:46,180 --> 00:01:49,607
+Each agent writes its decision as a node, and the next one reads
+
+38
+00:01:49,607 --> 00:01:52,819
+it from there. The graph is their shared workspace and their
+
+39
+00:01:52,819 --> 00:01:53,462
+audit trail.
+
+40
+00:01:54,812 --> 00:01:59,625
+In about a second, they propose rerouting three shipments by sea
+
+41
+00:01:59,625 --> 00:02:01,730
+for $19,000, saving $68,000.
+
+42
+00:02:02,050 --> 00:02:05,026
+Spending needs approval, and never from the person who asked.
+
+43
+00:02:07,176 --> 00:02:09,971
+The Agents view draws the run as the graph they wrote.
+
+44
+00:02:09,971 --> 00:02:12,094
+On the globe, you can watch them walk it.
+
+45
+00:02:15,144 --> 00:02:18,591
+Now, memory. Every approved plan records what it expected to
+
+46
+00:02:18,591 --> 00:02:20,889
+save, and later, what it actually saved.
+
+47
+00:02:21,209 --> 00:02:25,879
+At Suez in July, air freight cost $96,000 and delivered only 28
+
+48
+00:02:25,879 --> 00:02:28,399
+percent of the saving it promised.
+
+49
+00:02:28,399 --> 00:02:30,326
+Sea reroutes delivered 95.
+
+50
+00:02:31,376 --> 00:02:35,051
+In November, LA and Long Beach go on strike:
+
+51
+00:02:35,051 --> 00:02:36,889
+$681,000 in late fees.
+
+52
+00:02:37,209 --> 00:02:41,329
+At face value, air-freighting five shipments for $409,000 looks
+
+53
+00:02:41,329 --> 00:02:42,310
+like a bargain.
+
+54
+00:02:42,630 --> 00:02:46,481
+But Finance remembers Suez. At 28 percent, the rescue saves less
+
+55
+00:02:46,481 --> 00:02:49,971
+than it costs, so it recommends no rescue, and shows which
+
+56
+00:02:49,971 --> 00:02:51,415
+memory changed its mind.
+
+57
+00:02:52,865 --> 00:02:57,156
+Rerun without memory, and the agents would have paid for the air
+
+58
+00:02:57,156 --> 00:03:00,509
+freight. Memory avoided an expected $220,000 loss.
+
+59
+00:03:03,159 --> 00:03:07,242
+Everything runs on FalkorDB. Postgres is only a baseline that
+
+60
+00:03:07,242 --> 00:03:08,781
+returns identical rows.
+
+61
+00:03:09,101 --> 00:03:12,695
+On deep chains FalkorDB pulls ahead, and we documented three of
+
+62
+00:03:12,695 --> 00:03:14,007
+its bugs along the way.
+
+63
+00:03:14,327 --> 00:03:16,495
+Take FalkorDB out, and nothing runs.
+
+64
+00:03:18,045 --> 00:03:21,266
+Promise Graph. See every broken promise, rescue what matters,
+
+65
+00:03:21,266 --> 00:03:23,167
+and learn from what actually worked.
+

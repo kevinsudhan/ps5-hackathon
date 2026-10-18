@@ -40,7 +40,8 @@ Updated Oct 18 (day 4). Full state and gotchas: [`HANDOFF.md`](../HANDOFF.md). D
 | ? | Optional: speed up Q3 by tagging only backbone shipments (estimate: ~360 ms -> ~240 ms at 100k; would only draw level with pgRouting) | Only if everything above is done |
 
 ## Day 4 (Oct 18)
-Record the video (shot list in [`HANDOFF.md`](../HANDOFF.md)), final README, submit by the evening.
+Done: demo video (`explainer/promise-graph-demo-quick.mp4`), final README, **submitted Oct 18**. Left: public
+deployment (`render-deploy` branch), posting the blog and the FalkorDB bug report.
 
 ## Before submitting
 * Everyone joins team code BBJWAC (the page showed 1 of 4).

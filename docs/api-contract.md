@@ -144,6 +144,10 @@ ask/answer endpoints (`/chips`, `/ask`, `/compare`, `/sweep`, `/story`) are spec
 ranking fields (`rank`, `metric`, `count`, `blocked` on nodes; `weight`, `blocked`, `route` on links),
 and there is a new template, `top_loss_orders`.
 
+New on Oct 18 (additive): view endpoints for the globe (`POST /geo`, `GET /geo/network`,
+`GET /geo/run/{run_id}`), the order timeline (`GET /timeline`) and the agents' run (`GET /runs/{run_id}/graph`,
+`GET /runs/{run_id}/trace`). All read FalkorDB only; details in [`ui-contract.md`](ui-contract.md).
+
 Errors: FastAPI style `{"detail": "..."}`. Approve returns **403** when `by` equals the run's
 `requested_by` (policy gate: you cannot approve your own request) and **409** when the decision is
 not `verified`. Unknown tenant: 404.

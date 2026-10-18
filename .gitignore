@@ -15,3 +15,6 @@ video/build/music.wav
 video/build/sfx.wav
 video/build/mix.wav
 video/build/vo/*.key
+
+# explainer video: frames, audio and other regenerable outputs (see explainer/README.md)
+explainer/build/

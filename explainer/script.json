@@ -1,0 +1,248 @@
+{
+  "voice": "af_heart",
+  "speed": 1.15,
+  "line_gap": 0.32,
+  "scene_gap": 0.45,
+  "scenes": [
+    {
+      "id": "promise",
+      "pre": 0.6,
+      "post": 0.2,
+      "lines": [
+        {
+          "id": "p1",
+          "text": "Every order a company ships comes with a promise: a delivery date."
+        },
+        {
+          "id": "p2",
+          "text": "Aisha Rahman in Liverpool was promised hers by December 14th."
+        }
+      ]
+    },
+    {
+      "id": "closure",
+      "post": 0.3,
+      "lines": [
+        {
+          "id": "c1",
+          "text": "On October 20th, a cyber incident shuts the terminals at the Port of Singapore."
+        },
+        {
+          "id": "c2",
+          "text": "Her parcel never goes near Singapore. It will still be late."
+        }
+      ]
+    },
+    {
+      "id": "ripple",
+      "post": 0.6,
+      "lines": [
+        {
+          "id": "r1",
+          "text": "Radio modules get stuck at the port. The circuit boards waiting on them slip, then the smart home devices, the warehouse restock, and her parcel."
+        },
+        {
+          "id": "r2",
+          "text": "Four steps down the chain, she's three days late."
+        },
+        {
+          "id": "r3",
+          "text": "Across the network: 755 late orders, $114,000 in fees, and nobody sees it coming."
+        }
+      ]
+    },
+    {
+      "id": "title",
+      "pre": 0.2,
+      "post": 0.8,
+      "lines": [
+        {
+          "id": "t1",
+          "text": "This is Promise Graph."
+        },
+        {
+          "id": "t2",
+          "text": "It finds every broken promise, works out what to rescue, and runs AI agents that remember what worked."
+        }
+      ]
+    },
+    {
+      "id": "model",
+      "post": 0.6,
+      "lines": [
+        {
+          "id": "m1",
+          "text": "Underneath is a FalkorDB graph: ports, lanes, shipments that feed each other, and orders with promises."
+        },
+        {
+          "id": "m2",
+          "text": "A closed port is a starting node. The damage is a path, and one Cypher query walks it."
+        }
+      ]
+    },
+    {
+      "id": "ask",
+      "pre": 1.4,
+      "post": 1.2,
+      "lines": [
+        {
+          "id": "a1",
+          "text": "Ask in plain English, and you get one sentence and a graph of only what answers it."
+        },
+        {
+          "id": "a2",
+          "text": "The AI only picks a question template. Every number comes from Cypher."
+        }
+      ]
+    },
+    {
+      "id": "views",
+      "pre": 0.4,
+      "post": 2.0,
+      "lines": [
+        {
+          "id": "v1",
+          "text": "See it on the globe, or step by step: what FalkorDB walked, how long it took, and the exact query."
+        }
+      ]
+    },
+    {
+      "id": "why",
+      "pre": 0.3,
+      "post": 2.8,
+      "lines": [
+        {
+          "id": "w1",
+          "text": "Ask why Aisha's order is late: the chain back to the port, then the same chain on a calendar."
+        }
+      ]
+    },
+    {
+      "id": "more",
+      "pre": 0.2,
+      "post": 2.6,
+      "lines": [
+        {
+          "id": "q1",
+          "text": "Or ask for the costliest orders, what to rescue first, or a way around the port."
+        }
+      ]
+    },
+    {
+      "id": "agents",
+      "post": 0.6,
+      "lines": [
+        {
+          "id": "g1",
+          "text": "Then six AI agents take over, and they coordinate through the graph."
+        },
+        {
+          "id": "g2",
+          "text": "Sentinel recalls similar disruptions, the Impact Analyst traces the damage, the Rerouter finds routes, Finance prices each rescue, and the Verifier rechecks the numbers."
+        },
+        {
+          "id": "g3",
+          "text": "Each agent writes its decision as a node, and the next one reads it from there. The graph is their shared workspace and their audit trail."
+        }
+      ]
+    },
+    {
+      "id": "run",
+      "pre": 0.3,
+      "post": 1.4,
+      "lines": [
+        {
+          "id": "x1",
+          "text": "In about a second, they propose rerouting three shipments by sea for $19,000, saving $68,000."
+        },
+        {
+          "id": "x2",
+          "text": "Spending needs approval, and never from the person who asked."
+        }
+      ]
+    },
+    {
+      "id": "agentsview",
+      "pre": 0.3,
+      "post": 2.6,
+      "lines": [
+        {
+          "id": "y1",
+          "text": "The Agents view draws the run as the graph they wrote. On the globe, you can watch them walk it."
+        }
+      ]
+    },
+    {
+      "id": "memory",
+      "post": 0.6,
+      "lines": [
+        {
+          "id": "k1",
+          "text": "Now, memory. Every approved plan records what it expected to save, and later, what it actually saved."
+        },
+        {
+          "id": "k2",
+          "text": "At Suez in July, air freight cost $96,000 and delivered only 28 percent of the saving it promised. Sea reroutes delivered 95."
+        }
+      ]
+    },
+    {
+      "id": "flip",
+      "post": 0.8,
+      "lines": [
+        {
+          "id": "f1",
+          "text": "In November, LA and Long Beach go on strike: $681,000 in late fees."
+        },
+        {
+          "id": "f2",
+          "text": "At face value, air-freighting five shipments for $409,000 looks like a bargain."
+        },
+        {
+          "id": "f3",
+          "text": "But Finance remembers Suez. At 28 percent, the rescue saves less than it costs, so it recommends no rescue, and shows which memory changed its mind."
+        }
+      ]
+    },
+    {
+      "id": "proofmem",
+      "pre": 0.2,
+      "post": 2.2,
+      "lines": [
+        {
+          "id": "f4",
+          "text": "Rerun without memory, and the agents would have paid for the air freight. Memory avoided an expected $220,000 loss."
+        }
+      ]
+    },
+    {
+      "id": "falkor",
+      "post": 0.8,
+      "lines": [
+        {
+          "id": "z1",
+          "text": "Everything runs on FalkorDB. Postgres is only a baseline that returns identical rows."
+        },
+        {
+          "id": "z2",
+          "text": "On deep chains FalkorDB pulls ahead, and we documented three of its bugs along the way."
+        },
+        {
+          "id": "z3",
+          "text": "Take FalkorDB out, and nothing runs."
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "pre": 0.3,
+      "post": 3.2,
+      "lines": [
+        {
+          "id": "o1",
+          "text": "Promise Graph. See every broken promise, rescue what matters, and learn from what actually worked."
+        }
+      ]
+    }
+  ]
+}

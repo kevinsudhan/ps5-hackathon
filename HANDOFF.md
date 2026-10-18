@@ -19,9 +19,9 @@ remember past disruptions. Postgres + pgRouting is only the benchmark baseline. 
 | Demo rehearsal | **Passed twice in a row** through the API and once fully in the UI (checked, details below). |
 | FalkorDB bug report | Still reproduces (checked Oct 17). **Not posted.** B is already upstream (#2972, fix PR #3264): comment there. A is new: post it. Details at the top of `docs/falkordb-bug-report.md`. |
 | Deploy | **Packaged, not hosted.** `docker compose --profile app up -d --build` runs everything on :8080 and loads the data on first start (checked from empty volumes). Hosting needs a VM with Docker (or FalkorDB Cloud + any container host): someone with an account. |
-| README final pass | Done except the demo video link and a deployment URL: status, both ways to run (one command; step by step incl. the frontend), screenshots, architecture diagram, bug section, rules checklist. |
-| Blog post | Draft in `docs/blog-post.md`, numbers checked against `bench/NOTES.md`. Needs the team's edit, then posting. |
-| Demo video | Not recorded. Proposed shot list below. |
+| README final pass | Done (Oct 18): status, both ways to run, screenshots of every view, the five views, a demo walkthrough with the numbers, architecture, bug section, rules checklist, demo video link. Only a deployment URL is missing. |
+| Blog post | In `docs/blog-post.md` (linked in the submission). Not posted on a blogging platform. |
+| Demo video | **Done (Oct 18):** `explainer/promise-graph-demo-quick.mp4`, 3:26, narrated with captions; real app footage plus slides. How it was made and how to rebuild it: `explainer/README.md`. (`video/` holds a teammate's separate motion-graphics version, not finished.) |
 
 ## Get it running (Windows, about 5 minutes)
 

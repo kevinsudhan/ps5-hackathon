@@ -1,0 +1,145 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>slides</title>
+<style>
+@font-face { font-family: Inter; src: url(assets/inter.woff2) format("woff2"); font-weight: 100 900; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: #1E2340; }
+body { font-family: Inter, sans-serif; color: #F1EEF6; }
+.s { position: absolute; inset: 0; display: none; padding: 110px 150px 170px; flex-direction: column; justify-content: center;
+     background: radial-gradient(1100px 700px at 18% 12%, rgba(107,89,127,.35), transparent 60%),
+                 radial-gradient(900px 600px at 88% 80%, rgba(63,91,141,.35), transparent 60%), #1E2340; }
+.s.on { display: flex; }
+.k { font-size: 26px; letter-spacing: .14em; text-transform: uppercase; color: #92A1C2; font-weight: 700; margin-bottom: 26px; }
+h1 { font-size: 88px; line-height: 1.05; font-weight: 750; letter-spacing: -.02em; }
+h2 { font-size: 64px; line-height: 1.1; font-weight: 720; letter-spacing: -.015em; }
+p { font-size: 36px; line-height: 1.4; color: #C9CFE0; margin-top: 26px; max-width: 1500px; }
+.row { display: flex; gap: 26px; margin-top: 46px; flex-wrap: wrap; align-items: stretch; }
+.card { background: rgba(46,54,90,.75); border: 1px solid rgba(146,161,194,.28); border-radius: 22px; padding: 26px 30px; min-width: 240px; }
+.card b { display: block; font-size: 46px; font-weight: 760; }
+.card span { display: block; font-size: 24px; color: #B9C1D6; margin-top: 6px; }
+.coral { color: #E8A3A9 !important; } .green { color: #9FD0B6 !important; } .amber { color: #E2BC86 !important; }
+.chain { display: flex; gap: 14px; align-items: center; margin-top: 50px; }
+.chain .card { min-width: 0; padding: 18px 18px; flex: 1; }
+.chain .card b { font-size: 22px; line-height: 1.25; }
+.chain .card span { font-size: 22px; }
+.arrow { font-size: 34px; color: #A2869C; }
+code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 25px; line-height: 1.55; color: #DDE3F2; white-space: pre; display: block;
+       background: rgba(20,24,46,.85); border: 1px solid rgba(146,161,194,.25); border-radius: 18px; padding: 26px 30px; margin-top: 38px; }
+code .h { color: #E8A3A9; }
+.agents { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 40px; }
+.agents .card b { font-size: 34px; }
+.agents .card span { font-size: 23px; }
+.agents .card i { display: block; font-style: normal; font-family: Consolas, monospace; font-size: 20px; color: #92A1C2; margin-top: 10px; }
+.logo { display: flex; align-items: center; gap: 34px; }
+.mark { width: 128px; height: 128px; border-radius: 30px; background: linear-gradient(135deg, #3F5B8D, #6B597F); display: grid; place-items: center; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+.pill { display: inline-block; padding: 12px 22px; border-radius: 999px; background: rgba(146,161,194,.16); border: 1px solid rgba(146,161,194,.3); font-size: 26px; margin: 0 14px 14px 0; }
+small { display: block; font-size: 22px; color: #92A1C2; margin-top: 30px; }
+</style></head><body>
+
+<section class="s" id="problem">
+  <div class="k">01 · The problem</div>
+  <h1>Every order is a promise.</h1>
+  <p>Aisha Rahman in Liverpool was promised her order by <b>December 14</b>. On October 20, a cyber incident shuts the terminals at the <b class="coral">Port of Singapore</b> (Oct 20–24, then 3 days of backlog). Her parcel never goes near Singapore. It will still be late.</p>
+</section>
+
+<section class="s" id="ripple">
+  <div class="k">01 · The problem</div>
+  <h2>The delay travels down the supply chain</h2>
+  <div class="chain">
+    <div class="card"><b class="coral">Port of Singapore</b><span>closed</span></div><div class="arrow">→</div>
+    <div class="card"><b>Radio modules → Johor PCB Fabrication</b><span class="coral">+8 days</span></div><div class="arrow">→</div>
+    <div class="card"><b>PCB assemblies → Dongguan</b><span class="coral">+6 days</span></div><div class="arrow">→</div>
+    <div class="card"><b>Smart home devices → DC Daventry</b><span class="coral">+5 days</span></div><div class="arrow">→</div>
+    <div class="card"><b>Restock → DC Manchester</b><span class="coral">+4 days</span></div><div class="arrow">→</div>
+    <div class="card"><b>Parcel → Liverpool</b><span class="coral">+4 days</span></div><div class="arrow">→</div>
+    <div class="card"><b>Aisha's order</b><span class="coral">3 days late · $63</span></div>
+  </div>
+  <div class="row">
+    <div class="card"><b class="coral">755</b><span>orders at risk</span></div>
+    <div class="card"><b class="coral">$114,065</b><span>in late fees</span></div>
+    <div class="card"><b>6</b><span>independent pile-ups</span></div>
+    <div class="card"><b>1,784</b><span>shipments delayed</span></div>
+  </div>
+</section>
+
+<section class="s" id="title">
+  <div class="logo">
+    <div class="mark"><svg width="74" height="74" viewBox="0 0 74 74"><circle cx="18" cy="20" r="9" fill="#F1EEF6"/><circle cx="56" cy="20" r="9" fill="#92A1C2"/><circle cx="37" cy="56" r="9" fill="#E8A3A9"/><path d="M18 20 L56 20 L37 56 Z" fill="none" stroke="#F1EEF6" stroke-width="4" opacity=".7"/></svg></div>
+    <div><h1 style="font-size:110px">Promise Graph</h1></div>
+  </div>
+  <p>Finds every broken promise when a port closes, works out what to rescue, and runs AI agents that remember what worked.</p>
+  <div style="margin-top:40px"><span class="pill">Built on FalkorDB</span><span class="pill">Graph Hacks · Track 2: Agent Memory &amp; Coordination</span><span class="pill">Team Araxys</span></div>
+</section>
+
+<section class="s" id="model">
+  <div class="k">02 · The graph</div>
+  <h2>One FalkorDB graph per company: ports, lanes, shipments that feed each other, orders and their promises</h2>
+  <p>A closed port is a starting node. The damage is a path, and one Cypher query walks it.</p>
+  <code>MATCH (e:Event {id: $event})-[:AFFECTS]-&gt;(h:Hub)
+<span class="h">MATCH p = (s0)-[:FEEDS*0..8]-&gt;(s:Shipment)</span>
+WITH s, reduce(d = d0, f IN relationships(p) |
+     CASE WHEN d &gt; f.buffer_days THEN d - f.buffer_days ELSE 0 END) AS delay
+MATCH (s)&lt;-[:FULFILLED_BY]-(o:Order)-[:HAS_PROMISE]-&gt;(pr:Promise)
+RETURN pr.id, late, late * pr.penalty_per_day</code>
+</section>
+
+<section class="s" id="agents">
+  <div class="k">04 · Coordination</div>
+  <h2>Six AI agents hand off through the graph</h2>
+  <div class="agents">
+    <div class="card"><b>Sentinel</b><span>spots the disruption, recalls similar ones</span><i>algo.betweenness · recall</i></div>
+    <div class="card"><b>Impact Analyst</b><span>traces the damage</span><i>FEEDS*0..8 · algo.WCC</i></div>
+    <div class="card"><b>Rerouter</b><span>finds routes around the closed port</span><i>algo.SPpaths</i></div>
+    <div class="card"><b>Finance</b><span>prices each rescue with the track record</span><i>what-if cascade · USED_MEMORY</i></div>
+    <div class="card"><b>Verifier</b><span>rechecks every number</span><i>re-runs the queries · 13 of 13</i></div>
+    <div class="card"><b>Comms</b><span>drafts customer messages after a person approves</span><i>APPROVED_BY a person</i></div>
+  </div>
+  <p style="font-size:30px">Each agent writes its decision as a node; the next one reads it from there. <span class="green">The graph is their shared workspace and their audit trail.</span></p>
+</section>
+
+<section class="s" id="memory">
+  <div class="k">05 · Memory</div>
+  <h2>Every approved plan records what it expected to save, and what it actually saved</h2>
+  <div class="row">
+    <div class="card"><b class="coral">Suez · Jul 2026</b><span>air freight for full containers: spent $96,000, expected to avoid $148,000, avoided $41,000</span></div>
+    <div class="card"><b class="coral">28%</b><span>air freight's track record</span></div>
+    <div class="card"><b class="green">95%</b><span>sea reroutes via a neighbouring port (Colombo, Port Klang)</span></div>
+  </div>
+</section>
+
+<section class="s" id="flip">
+  <div class="k">05 · Memory</div>
+  <h2>LA / Long Beach labour action · Nov 20–30 · 1,474 orders · <span class="coral">$681,534</span> in fees</h2>
+  <div class="row">
+    <div class="card"><b>At face value</b><span>air-freight 5 shipments for <b class="coral" style="display:inline;font-size:24px">$409,441</b> to save $681,534</span></div>
+    <div class="card"><b class="coral">Finance remembers Suez</b><span>counted at 28%, it saves about $188,785: less than it costs</span></div>
+    <div class="card"><b class="green">No rescue</b><span>inform affected customers · past experience changed this plan</span></div>
+  </div>
+  <small>(plan)-[:USED_MEMORY {effect: 'changed'}]-&gt;(playbook)</small>
+</section>
+
+<section class="s" id="falkor">
+  <div class="k">06 · Why FalkorDB</div>
+  <h2>Everything runs on FalkorDB. Postgres is only a baseline that returns identical rows.</h2>
+  <div class="row">
+    <div class="card"><b>1.4–3.2×</b><span>faster engine time on deep cascades (20k–100k orders)</span></div>
+    <div class="card"><b>8 vs 30</b><span>lines: Cypher vs SQL for reroutes</span></div>
+    <div class="card"><b>3</b><span>FalkorDB bugs found and documented</span></div>
+    <div class="card"><b class="coral">0</b><span>endpoints work without FalkorDB</span></div>
+  </div>
+</section>
+
+<section class="s" id="outro">
+  <div class="logo">
+    <div class="mark"><svg width="74" height="74" viewBox="0 0 74 74"><circle cx="18" cy="20" r="9" fill="#F1EEF6"/><circle cx="56" cy="20" r="9" fill="#92A1C2"/><circle cx="37" cy="56" r="9" fill="#E8A3A9"/><path d="M18 20 L56 20 L37 56 Z" fill="none" stroke="#F1EEF6" stroke-width="4" opacity=".7"/></svg></div>
+    <h1 style="font-size:100px">Promise Graph</h1>
+  </div>
+  <div style="margin-top:44px"><span class="pill">See every broken promise</span><span class="pill">Rescue what matters</span><span class="pill">Agents that coordinate through the graph</span><span class="pill">Memory that changes decisions</span></div>
+  <p>github.com/kevinsudhan/ps5-hackathon</p>
+  <small>Team Araxys: Pranay J Sathish · Kevin Sudhan · Manish Arunkumar · Shyam Nair · All data synthetic · Narration: synthetic voice (Kokoro)</small>
+</section>
+<script>
+const id = new URLSearchParams(location.search).get('s');
+document.getElementById(id)?.classList.add('on');
+</script>
+</body></html>

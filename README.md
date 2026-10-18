@@ -12,7 +12,9 @@ Pranay J Sathish, Kevin Sudhan, Manish Arunkumar, Shyam Nair.
 
 ![The console: what happened and how big it is, a plain-English question box, and the six agents ready to respond](docs/screenshots/01-overview.png)
 
-## Status (Oct 17, day 3)
+**Demo video (3:26, narrated, captions):** [`explainer/promise-graph-demo-quick.mp4`](explainer/promise-graph-demo-quick.mp4)
+
+## Status (Oct 18, day 4: submitted)
 
 Working and tested (`backend/tests`, 39 integration tests; demo rehearsed end to end in the UI):
 * FalkorDB + a Postgres (with pgRouting) baseline in Docker, **one isolated graph per shipper company**
@@ -28,17 +30,24 @@ Working and tested (`backend/tests`, 39 integration tests; demo rehearsed end to
 * **A live agent timeline:** the agents run in the background and stream each step as it starts and
   finishes (server-sent events), with real timings, the human approval gate and Comms.
 * The console: what happened and how big it is, then ask in plain English and the answer is drawn as a
-  graph of **only the entities that answer it** (ranked, sized by impact, 2D or 3D), with "How it was
-  found" under every answer (the exact query, its time, Compare engines). The agents' response and
-  what memory changed sit beside it; an engine switch in the top bar picks FalkorDB or PostgreSQL for
-  questions. Plus a 30-second story.
+  graph of **only the entities that answer it** (ranked, sized by impact), with "How it was found" under
+  every answer (the exact query, its time, Compare engines). The agents' response and what memory
+  changed sit beside it; an engine switch in the top bar picks FalkorDB or PostgreSQL for questions.
+  Plus a 30-second story.
+* **Five ways to look at an answer** ([below](#five-ways-to-look-at-an-answer)): the **Diagram**; a
+  **Globe** that puts the answer on the real world and can replay the agents walking the graph; a
+  **Timeline** of a late order's chain on the calendar; the **Agents** view, which draws a run as the
+  subgraph the agents wrote in FalkorDB (memory, handoffs, the world they touched); and **Step by
+  step**, which explains how FalkorDB worked the answer out and lights up each step on the graph.
 * Exact parity: FalkorDB, Postgres and a plain-Python reference return identical rows.
 * Concurrency: 8 agent runs across 2 tenants in parallel with 8 readers, chains intact, tenants isolated.
 * A fair benchmark (below) and the HTTP API the UI uses ([`docs/api-contract.md`](docs/api-contract.md)).
 * One-command run: `docker compose --profile app up` builds the app, starts both databases and loads
   the demo data on first start.
 
-Still to do: public deployment, demo video, blog post, posting the FalkorDB bug report.
+Submitted on Oct 18 with the demo video above and the blog post in [`docs/blog-post.md`](docs/blog-post.md).
+Not done: public deployment (free Render hosting is prepared on the `render-deploy` branch, not merged),
+posting the blog on a blogging platform, posting the FalkorDB bug report upstream.
 
 ## Quick start
 
@@ -62,7 +71,7 @@ pip install -r requirements.txt
 cp .env.example .env                     # optional: add GEMINI_API_KEY for nicer wording (numbers never come from it)
 python -m scripts.load                   # both demo tenants + agent memory + seeded history (~15 s)
 python -m scripts.parity                 # prove both engines agree with the reference
-python -m pytest -q tests                # 19 integration tests (needs the containers)
+python -m pytest -q tests                # 39 integration tests (needs the containers)
 uvicorn promisegraph.api:app --port 8000 # API: http://localhost:8000/docs
 ```
 
@@ -109,8 +118,74 @@ RETURN c, o, s, up LIMIT 50
 | **Memory influence:** which past experience changed this decision, what happened then, and how it changed the plan. | **With vs without memory:** the same analysis rerun with memory switched off; only memory differs. |
 | ![Why is Aisha's order late](docs/screenshots/06-why.png) | ![The 10 costliest late orders](docs/screenshots/07-top-loss.png) |
 | **Why is this order late?** The delay's path through the graph, step by step, from the closed port to her order. | **The 10 costliest late orders,** ranked, under the shipments that hold them up. |
-| ![The same answer in 3D](docs/screenshots/08-3d.png) | ![How it was found: the exact query, steps and first rows](docs/screenshots/09-technical.png) |
-| **3D:** the same answer lifted into space. | **How it was found:** under every answer; the exact query (copyable), its time, and Compare engines. |
+| ![The same answer on the globe](docs/screenshots/08-globe.png) | ![How it was found: the exact query, steps and first rows](docs/screenshots/09-technical.png) |
+| **Globe:** the same answer on the real world: the closed port, the stuck shipments' routes and where the late orders are delivered. | **How it was found:** under every answer; the exact query (copyable), its time, and Compare engines. |
+| ![Step by step: how FalkorDB worked it out](docs/screenshots/10-step-by-step.png) | ![Timeline of a late order](docs/screenshots/11-timeline.png) |
+| **Step by step:** beside the diagram or globe, how FalkorDB worked the answer out, one plain step at a time, with its timing and the exact Cypher; picking a step lights it up on the left. | **Timeline:** for "why is this order late", every step of the chain on the calendar: the port's closed window and backlog, each shipment's planned trip, days lost at each step, and the promised date. |
+| ![How the agents handled it: memory, handoffs and the world graph](docs/screenshots/12-agents-graph.png) | ![Watch the agents walk the graph on the globe](docs/screenshots/13-agents-walk.png) |
+| **Agents:** one run as the subgraph the agents wrote in FalkorDB: past runs and playbooks they read (memory) on top, the handoff pipeline in the middle, the supply-chain nodes they read and wrote below. | **Watch the agents:** the run replayed on the globe; each agent walks what it actually read or wrote, with a caption of what it found. |
+
+## Five ways to look at an answer
+
+The view switcher above every answer offers the views that make sense for it. All of them are read
+from FalkorDB; none recomputes a number (the figures are the answer's rows or node properties).
+
+| View | What it shows | Offered | Served by |
+|---|---|---|---|
+| **Diagram** | Only the entities that answer the question, ranked and sized by impact: a chain for "why late", ranked groups for "rescue first", fastest / cheapest options around a blocked hub for a reroute. More than ~25 cards fold into "+N more" (click to expand). Hover traces a path; click a card for "why". | always | the answer's own graph (`/ask`) |
+| **Globe** | The answer on the real world: the closed port, the hubs the stuck shipments pass, and late-order counts where customers are delivered, over a faint map of every hub and lane. Once the agents have run, **Watch the agents** replays the run: each agent walks the nodes it read or wrote (its evidence, the route options it proposed or chose), with a caption. | always | `POST /geo`, `GET /geo/network`, `GET /geo/run/{run_id}` |
+| **Timeline** | For "why is this order late": each shipment of the chain on a calendar, the port's closed window and its backlog, days lost at each step, buffers that soaked up delay, and the customer's promised date. **Replay** animates it. | "why late" answers | `GET /timeline` (planned dates from the graph; delays from the answer's rows) |
+| **Agents** | One run as the subgraph the agents wrote: **memory** (past runs the Sentinel recalled, playbooks Finance used, what Comms writes back) on top, the **handoffs** (one card per agent with its result and time) in the middle, and the **world** (disruption, closed port, stuck shipments, stranded groups, route options, promises) below. "How this is drawn" shows the Cypher. | once a run exists | `GET /runs/{run_id}/graph` |
+| **Step by step** | A split view beside the diagram or globe: what you asked, what FalkorDB walked (in plain words, with the time, the query size and the exact Cypher), and the result. For a run, one step per agent. Picking a step lights up the nodes it touched. | answers and runs | the answer's query info; `GET /runs/{run_id}/trace` |
+
+## Demo walkthrough (the numbers you should see)
+
+Northwind, Singapore terminals shut by a cyber incident (Oct 20-24, then 3 days of backlog). Data is
+synthetic and deterministic, so these numbers repeat on every fresh load.
+
+1. **Landing.** No graph yet: what happened (**755** orders at risk, **$114,065** late-fee exposure, **6**
+   independent groups, **1,784** shipments delayed), an ask box with suggestions, and the six agents
+   waiting on the right.
+2. **"Orders at risk from Singapore".** "755 orders will arrive late because Singapore's terminals shut,
+   with $114,065 in late fees." The diagram shows the stuck shipments ranked by late fees (the worst:
+   winter apparel for Northwind DC Inland Empire, 210 late orders, $36,756), Aisha Rahman's order kept
+   in view, the rest folded into "+3 more shipments". Switch to **Globe**, then open **Step by step**:
+   "start at the closed port, take the shipments passing through it while it is shut, follow every
+   shipment that waits on another, up to 8 steps" (a variable-length `FEEDS` traversal; its time is shown).
+3. **"Why is Aisha's order late?"** A numbered chain: radio modules to Johor PCB Fabrication stuck at
+   Port of Singapore (8 days late there), then PCB assemblies to Dongguan (6), smart home devices to
+   DC Daventry (5), replenishment to DC Manchester (4), a parcel to Liverpool (4), and her order:
+   **3 days late**, a $63 fee, promised Dec 14. Switch to **Timeline** to see it on the calendar.
+4. **Other questions.** "10 most loss-inducing orders": $32,897 together, the worst Cedar Trading LLC
+   in Atlanta, 6 days late, $4,692. "What to rescue first": rescue OCN-00062 first (210 orders,
+   $36,756); 755 orders fall into 6 groups traced to 12 shipments. "Places everything depends on":
+   Port of Singapore, then Port Said and Singapore Changi Airport. "A way around Singapore" (Ho Chi Minh
+   City to Venlo): by air and road via Tan Son Nhat, Hong Kong and Amsterdam Schiphol, 5 days at
+   $9.71 per kg, with Port of Singapore drawn as blocked.
+5. **Run the agents.** The timeline fills step by step with real timings (1-2 s in all): 12
+   shipments hit, 755 orders / $114,065 / 6 groups, 8 routes for 4 of 12 stuck shipments, **Reroute 3
+   shipments by sea for $19,180** (saves $68,257, 406 orders back on time), **13 of 13 checks** passed.
+   Memory was checked and did not change this plan (sea reroutes delivered 95% before). Open the
+   **Agents** view: three past runs recalled (Suez Jul 2026 did not pay off; Port Klang and Colombo
+   worked), two playbooks, the handoff chain and the world nodes each agent touched. On the **Globe**,
+   **Watch the agents** replays it.
+6. **Approval.** The requester cannot approve their own plan (blocked); someone else approves, and Comms
+   drafts customer messages.
+7. **Memory flips a decision.** Switch disruption to **LA / Long Beach labour action** (Nov 20-30): 1,474
+   orders, $681,534. Run the agents: Finance says **No rescue: inform affected customers**, tagged
+   "Past experience changed this plan". The memory card: at Suez (Jul 2026) air freight for full
+   containers spent $96,000 expecting to avoid $148,000 and avoided $41,000 (28%); counted at 28%,
+   air-freighting 5 shipments for $409,441 would save only ~$188,785. **Compare with and without
+   memory**: without memory the agents would air-freight 5 shipments for $409,441; **using past
+   experience avoided an expected loss of $220,656**.
+8. **Engines.** Flip the top-bar switch to PostgreSQL: the same sentence, answered by PostgreSQL;
+   **Compare engines** runs both back to back (same rows); **Benchmark** sweeps 2 to 8 steps.
+9. **The second company.** Company: **Lumen**: 40 orders at risk from Singapore ($9,214); none from LA.
+10. **Play the 30-second story**: the port closes, the delay spreads (57 shipments slip), orders break,
+    the agents respond, and the camera follows Aisha's order.
+
+Run `python -m scripts.reset_demo` (from `backend/`) before a demo: every run adds to memory and to the
+playbooks' counts.
 
 ## Memory that changes decisions (Track 2)
 
@@ -156,6 +231,8 @@ flowchart LR
   API --> AG["Six agents<br/>agents.py + memory.py"]
   Q -->|Cypher| FK[("FalkorDB<br/>one graph per company:<br/>supply chain + agent memory")]
   AG -->|"Cypher, algo.WCC,<br/>betweenness, SPpaths"| FK
+  API --> V["Views<br/>geo.py, timeline.py, runviz.py<br/>globe, timeline, agents, step by step"]
+  V -->|Cypher| FK
   AG -.->|"wording only,<br/>numbers checked"| LLM["Gemini<br/>(optional)"]
   Q -.->|"SQL twin, only for the<br/>engine switch / Compare / Benchmark"| PG[("Postgres + pgRouting<br/>baseline")]
 ```
@@ -217,6 +294,9 @@ traced to 12 root shipments. Finance proposes rescuing 3 roots by sea for $19,18
 406 promises; priced with the track record (sea reroutes delivered 95% before) the expected saving is
 $64,578, and air freight (28%) never comes close. On LA / Long Beach memory flips the plan (above).
 Gemini only rewrites the wording; any sentence with a number that is not in the facts is thrown away.
+The **Agents** view draws any run as exactly this: the decisions chained by `NEXT`, what each one read
+(`EVIDENCE`, recalled runs, `USED_MEMORY`) and what it wrote (`FOUND`, `PROPOSES` / `CHOOSES`,
+`APPROVED_BY`, the outcome and playbook Comms writes back).
 
 ## Graph data model
 
@@ -234,6 +314,9 @@ Full model, property tables and the agent-memory contract: [`docs/graph-model.md
 (Decision {kind: 'plan'})-[:RESULTED_IN]->(Outcome {expected, saved_usd}), (Decision)-[:FOLLOWED]->(Playbook)
 (Decision)-[:USED_MEMORY {realization, effect}]->(Playbook)
 (Run {memory: 'off'})-[:COUNTERFACTUAL_OF]->(Run)
+(Person)-[:REQUESTED]->(Run), (Agent)-[:MADE]->(Decision), (Decision)-[:APPROVED_BY]->(Person)
+(Decision)-[:EVIDENCE]->(any node it relied on, incl. recalled past Runs)
+(Decision)-[:FOUND]->(Cluster)-[:ROOT]->(Shipment), (Decision)-[:PROPOSES|CHOOSES]->(RouteOption)
 ```
 
 ## Queries and algorithms the product depends on
@@ -293,7 +376,12 @@ on Cypher and FalkorDB graph algorithms. Postgres is used **only** to compare ag
 scripts and the race features in the UI (the engine switch, Compare and Benchmark, served by `/ask`
 with `engine=postgres`, `/compare`, `/sweep` and `/race`). Its queries are SQL twins of the product's
 Cypher (cascade, two clusters baselines, and pgRouting chokepoint/reroute baselines). Agents and
-memory never touch it.
+memory never touch it, and neither do the Globe, Timeline, Agents and Step by step views.
+
+Checked on Oct 18: we started the API with FalkorDB unreachable and called every product endpoint
+(health, events, clusters, suggestions, questions on **both** engines, Compare, Benchmark, the story,
+starting a run, memory recall). All of them failed, including questions answered by PostgreSQL,
+because even understanding a question checks its names against the graph.
 
 ## FalkorDB bugs we hit
 
@@ -317,7 +405,7 @@ engine and the server process exits. We split that query and restart the contain
 | Graph data model | [Graph data model](#graph-data-model), full: [`docs/graph-model.md`](docs/graph-model.md) |
 | Cypher queries and graph algorithms | [Queries and algorithms](#queries-and-algorithms-the-product-depends-on), all of them: [`docs/queries.md`](docs/queries.md) |
 | Live deployment, or complete local setup | [Deploying](#deploying) / [Option 1](#option-1-one-command-needs-only-docker) |
-| Demo video | *link to come* |
+| Demo video | [`explainer/promise-graph-demo-quick.mp4`](explainer/promise-graph-demo-quick.mp4) (3:26; how it was made: [`explainer/README.md`](explainer/README.md)) |
 | Track | Track 2: Agent Memory and Coordination |
 | AI tools disclosed | [Disclosure](#disclosure) |
 
@@ -343,13 +431,18 @@ backend/promisegraph/       datagen.py, world.py, falkor_store.py (product queri
                             (prompt box: whitelisted templates, Cypher/SQL twins), story.py, memory.py (agent memory),
                             agents.py (the six agents, live run feed), influence.py (memory influence, with/without
                             memory comparison), views.py (graph views for the UI), llm.py (wording only),
-                            history.py (seeded synthetic history), api.py, pg_store.py (baseline only)
+                            history.py (seeded synthetic history), geo.py (globe), timeline.py (order
+                            timeline), runviz.py (agent run graph and step-by-step trace), api.py,
+                            pg_store.py (baseline only)
 backend/scripts/            load.py, parity.py, bench.py, concurrency.py, export_queries.py, reset_demo.py,
                             repro_falkordb.py
 backend/tests/              integration tests (parity, agents, views, LLM guard, memory features)
 docs/                       graph-model.md, queries.md, api-contract.md, ui-contract.md, TASKS.md,
                             falkordb-bug-report.md, blog-post.md, screenshots/
 bench/                      results and NOTES.md
+explainer/                  the demo video: narration script, voice (Kokoro), app capture, slides, the cut
 frontend/                   React + Vite app; design tokens in src/styles/tokens.css, answer layout in
-                            src/lib/answerLayout.ts, 2D answer graph + 3D view in src/components/
+                            src/lib/answerLayout.ts; views in src/components/: AnswerGraph (diagram),
+                            WorldMap (globe, "watch the agents"), OrderTimeline, AgentRunGraph,
+                            AgentTrace (step by step), GraphStage (the view switcher)
 ```

@@ -9,7 +9,7 @@ The user types a question (or clicks a chip). The backend maps it to **one templ
 The LLM may pick the template and fill its slots; it never writes a query. Every template has a
 Cypher version (FalkorDB) and a SQL version (Postgres, fully indexed), both parameterised and tested
 to return the **same rows**. The engine switch picks which one answers. Each answer carries only its
-own small subgraph for the 3D view, with plain-English "why" lines on every node and link.
+own small subgraph for the views, with plain-English "why" lines on every node and link.
 
 Agents and memory run on FalkorDB only (Rule 3: the product must not work without it). When the
 switch is on PostgreSQL, the Agents/Memory tabs say "Runs on FalkorDB (the graph is the agents'
@@ -100,6 +100,12 @@ export interface Story {
 | POST | `/api/{tenant}/compare` body `{question}` | `Comparison`: same question on both engines, back to back |
 | GET | `/api/{tenant}/sweep?event_id=EV-SGSIN-1020` | `Sweep`: depth 2..8, real timings (median of 3 per point) for "orders at risk"; may take ~3-10 s. Call it on `bench` (100k orders) too when that tenant exists |
 | GET | `/api/{tenant}/story?event_id=EV-SGSIN-1020` | `Story` |
+| POST | `/api/{tenant}/geo` body `{ids: string[], groups: {group_id: parent_ids[]}}` | Globe (Oct 18): places every answer-graph id on the map: hubs as points, an event at the hub it closes, a shipment as the route its legs pass, an order or customer at its delivery zone, a group as the spread of its orders. Ids it cannot place are left out (`backend/promisegraph/geo.py`) |
+| GET | `/api/{tenant}/geo/network` | Globe backdrop: every hub (`id, name, kind, country, lat, lon`) and lane (`[from, to, mode]`) |
+| GET | `/api/{tenant}/geo/run/{run_id}` | "Watch the agents": each agent's step of one run in handoff order, with what it read or wrote placed on the map (its `EVIDENCE` nodes, recalled past runs at their disruption, route options proposed or chosen) |
+| GET | `/api/{tenant}/timeline?event_id=&shipments=a,b,c&order=` | Order timeline (Oct 18): planned dates for one "why late" chain: the disruption window and backlog, each shipment's legs, the `FEEDS` buffers between them and the promise. Computes no delay itself; the view draws the answer's rows on these dates (`timeline.py`) |
+| GET | `/api/{tenant}/runs/{run_id}/graph` | Agents view (Oct 18): the subgraph one run wrote: handoffs (`NEXT`), reads (`EVIDENCE`, recalled runs, `USED_MEMORY`), writes (`FOUND`, `PROPOSES` / `CHOOSES`, `APPROVED_BY`, outcome, playbook), plus the Cypher used, for "How this is drawn" (`runviz.py`) |
+| GET | `/api/{tenant}/runs/{run_id}/trace` | Step by step for a run: one plain step per agent, with the graph ids it touched (for highlighting) |
 
 ## Templates (whitelist)
 
@@ -135,6 +141,8 @@ answers hold exactly their N orders), ranked and sized by figures from the rows:
 The UI folds what does not fit (identical-looking siblings into one "3 shipments" card, more than six
 pieces into "+N more", above ~25 nodes the weakest leaves); every fold expands on click.
 
+All the view endpoints above read FalkorDB only and recompute no business number.
+
 ## UI behaviour the backend assumes
 
 * Top bar: logo, company, engine switch FalkorDB (primary) / PostgreSQL, Benchmark, Memory,
@@ -142,10 +150,13 @@ pieces into "+N more", above ~25 nodes the weakest leaves); every fold expands o
   memory always run on FalkorDB.
 * Landing: no graph. "What happened" (the disruption, its dates, four figures), a centred ask box with
   chips (`/chips?event_id=`).
-* After a question: the answer sentence, then a 2D (or 3D) graph of only the answering entities, then
+* After a question: the answer sentence, then a graph of only the answering entities (Diagram or Globe), then
   a one-line "How it was found" (engine, ms, query size; expands to the steps, the exact query with a
   Copy button and the first rows) with Compare engines (`/compare`). The ask box docks at the bottom.
 * Right panel: "What the agents recommend" (live timeline, recommendation, approval) and "What we
   learned" (memory influence, with vs without memory).
 * Benchmark (`/sweep`) and Memory (`/memory/recall`) open in a drawer.
+* Views above every answer (Oct 18): Diagram and Globe always; Timeline for "why late" answers; Agents
+  once a run exists; "Step by step" opens as a split view beside the diagram or globe. The story offers
+  Diagram and Globe.
 * "Play the story" uses `/story`, then `POST /runs` for the agents step, then the run's `recall`.
