@@ -297,3 +297,97 @@ def _playbook(pid: str, trigger: str, action: str, uses: int, wins: int, followe
             "uses": uses, "successes": wins, "uses_before": uses - (1 if followed else 0),
             "successes_before": wins - won, "realization": realization, "effect": effect, "read_by": read_by,
             "followed": followed}
+
+
+# ---- step by step (frontend/src/components/AgentTrace.tsx) ------------------------------------------
+# What each agent asked FalkorDB, in the order agents.py runs it, with the real query text. The
+# queries are the module constants the agents call (falkor_store, memory), so this cannot drift
+# from what ran. `feature` names the FalkorDB capability the step leans on.
+def _q(title: str, feature: str | None, cypher: str) -> dict:
+    return {"title": title, "feature": feature, "cypher": cypher.strip()}
+
+
+def _agent_queries(depth: int) -> dict[str, dict]:
+    cascade = fs.CASCADE.format(depth=depth)
+    whatif = fs.WHATIF.format(depth=depth)
+    reroute = fs.REROUTE.format(weight="cost_per_kg", cost="days")
+    return {
+        "sentinel": {
+            "asked": "Which places does this disruption shut, how much does the network depend on them, which "
+                     "shipments pass through while they are shut, and have we seen anything like it before?",
+            "queries": [
+                _q("Rank every place by how many routes depend on it", "algo.betweenness", fs.CHOKEPOINTS),
+                _q("Shipments with a leg through the closed port inside the closure", "pattern match", fs.HITS),
+                _q("Recall past runs at the same port, one lane away, or of the same kind", "memory recall",
+                   memory.RECALL),
+            ]},
+        "impact_analyst": {
+            "asked": f"Starting at the shipments stuck in the port, follow everything that waits on them, up to "
+                     f"{depth} steps, and keep the promises that now miss their date. Then split them into groups "
+                     f"that do not depend on each other.",
+            "queries": [
+                _q("Follow the delay along FEEDS and keep the broken promises", "variable-length FEEDS traversal",
+                   cascade),
+                _q("Split the delayed shipments into independent groups", "algo.WCC", fs.CLUSTERS),
+            ]},
+        "rerouter": {
+            "asked": "For the shipment at the root of each group, find the cheapest and the fastest way from where the "
+                     "goods are to where they must go, never through the closed port.",
+            "queries": [
+                _q("Read the groups and their root shipments the Impact analyst wrote", "handoff",
+                   "MATCH (:Decision {id: $impact})-[:FOUND]->(:Cluster)-[:ROOT]->(s:Shipment) RETURN DISTINCT s.id"),
+                _q("Shortest lane paths that avoid the closed port", "algo.SPpaths", reroute),
+            ]},
+        "finance": {
+            "asked": "What does each option cost, how much late penalty would it save, and how well did this kind of "
+                     "move work the last times we tried it?",
+            "queries": [
+                _q("Learned habits that apply to this kind of disruption", "memory recall", memory.PLAYBOOKS),
+                _q("Their track record: what past plans expected vs what they actually saved", "memory recall",
+                   memory.TRACK_RECORD),
+                _q("Re-run the cascade as if the chosen shipments were rescued", "variable-length FEEDS traversal",
+                   whatif),
+            ]},
+        "verifier": {
+            "asked": "Re-run the impact and the plan from scratch, check the groups add up, and walk every rescue route "
+                     "lane by lane to be sure it exists and avoids the closed port.",
+            "queries": [
+                _q("Re-run the impact", "variable-length FEEDS traversal", cascade),
+                _q("Re-walk each chosen route lane by lane", "pattern match",
+                   "UNWIND $pairs AS p MATCH (a:Hub {id: p[0]})-[l:LANE]->(b:Hub {id: p[1]})\n"
+                   "WHERE l.mode = p[2] RETURN count(*)"),
+            ]},
+        "comms": {
+            "asked": "With the approved plan, which customers are still late and by how much? Then write the expected "
+                     "outcome and the playbook update back into memory.",
+            "queries": [
+                _q("Promises still late after the rescue", "variable-length FEEDS traversal", whatif),
+                _q("Who is behind each late promise", "pattern match", fs.PROMISE_DETAILS),
+                _q("Write the expected outcome on the plan", "memory write",
+                   "MATCH (d:Decision {id: $d})\nCREATE (o:Outcome {id: $id, summary: $summary, cost_usd: $cost, "
+                   "saved_usd: $saved,\n  promises_saved: $promises, worked: $worked, expected: true})\n"
+                   "CREATE (d)-[:RESULTED_IN]->(o)"),
+            ]},
+    }
+
+
+@router.get("/api/{tenant}/runs/{run_id}/trace")
+def run_trace(tenant: str, run_id: str):
+    from .agents import DEPTH
+    g = _graph(tenant)
+    p = {"run": run_id}
+    if not g.query("MATCH (r:Run {id: $run}) RETURN r.id", p).result_set:
+        raise HTTPException(404, f"unknown run {run_id!r}")
+    # Extra ids worth lighting up per decision, beyond its EVIDENCE: the groups' root shipments, and
+    # the shipments and hubs of the routes proposed or chosen.
+    extra: dict[str, set] = {}
+    for did, sid in g.query(
+            "MATCH (:Run {id: $run})<-[:PART_OF]-(d:Decision)-[:FOUND]->(:Cluster)-[:ROOT]->(s:Shipment) "
+            "RETURN d.id, s.id", p).result_set:
+        extra.setdefault(did, set()).add(sid)
+    for did, sid, hubs in g.query(
+            "MATCH (:Run {id: $run})<-[:PART_OF]-(d:Decision)-[:PROPOSES|CHOOSES]->(o:RouteOption)-[:FOR]->(s:Shipment) "
+            "RETURN d.id, s.id, o.hubs", p).result_set:
+        extra.setdefault(did, set()).update([sid, *hubs])
+    return {"run_id": run_id, "depth": DEPTH, "agents": _agent_queries(DEPTH),
+            "extra_ids": {k: sorted(v) for k, v in extra.items()}}

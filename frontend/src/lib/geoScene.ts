@@ -2,26 +2,32 @@
 // where each id is), turned into markers, arcs, hop labels and rings. Pure functions, no three.js.
 import type { AskGraph, AskLink, AskNode, NodeKind, Tone } from '../api/types'
 
-export interface GeoHub { id: string; name: string; kind: string; lat: number; lon: number }
+export interface GeoHub { id: string; name: string; kind: string; lat: number; lon: number; country?: string | null }
 export type GeoPlace =
   | { type: 'point'; hub: string; customer?: string }
   | { type: 'route'; hubs: string[]; mode?: string; stage?: string }
   | { type: 'spread'; hub: string; zones: [string, number][] }
-export interface GeoData { hubs: Record<string, GeoHub>; places: Record<string, GeoPlace> }
+export interface GeoEvent { name: string; hub: string; start: string; end: string }
+export interface GeoData { hubs: Record<string, GeoHub>; places: Record<string, GeoPlace>; events?: Record<string, GeoEvent> }
+/** GET /api/{tenant}/geo/network: every hub and lane, drawn faintly behind the answer. */
+export interface GeoNetwork { hubs: (GeoHub & { country: string | null })[]; lanes: [string, string, string][] }
 
 export interface LL { lat: number; lng: number }
 export interface Anchor { in: LL; out: LL; mid: LL; all: LL[]; hubs: string[]; route: boolean }
 
+export type MarkerIcon = 'port' | 'airport' | 'warehouse' | 'factory' | 'place' | 'event' | 'group' | 'order'
 export interface Marker {
   key: string; at: LL; node: AskNode; nodes: AskNode[]; ids: string[]
   tone: Tone; size: number; label: string; sub: string | null; count: number | null
-  important: boolean; ring: boolean; step: number
+  important: boolean; ring: boolean; step: number; icon: MarkerIcon; weight: number
 }
 export interface Arc {
   key: string; layer: 'base' | 'flow'; from: LL; to: LL; tone: Tone; stroke: number; blocked: boolean
   lift: number; phase: number; step: number; ids: string[]; node?: AskNode; link?: AskLink; label: string
 }
-export interface HopChip { key: string; at: LL; cands: LL[]; lead: string; text: string; tone: Tone; node: AskNode; step: number }
+export interface HopChip {
+  key: string; at: LL; cands: LL[]; lead: string; text: string; sub: string; full: string; tone: Tone; node: AskNode; step: number
+}
 export interface Spot { key: string; at: LL; tone: Tone; r: number; step: number; node: AskNode; label: string }
 export interface Scene {
   markers: Marker[]; arcs: Arc[]; chips: HopChip[]; spots: Spot[]
@@ -64,18 +70,54 @@ export function between(a: LL, b: LL, t: number): LL {
   return fromVec([va[0] * ka + vb[0] * kb, va[1] * ka + vb[1] * kb, va[2] * ka + vb[2] * kb])
 }
 
-/** A camera position that shows every point: look at their centre, back off until the farthest fits. */
-export function fitView(points: LL[], minAlt = 0.6, maxAlt = 2.1, centreOn: LL[] = points): { lat: number; lng: number; altitude: number } | null {
+/** A camera position that shows every point: the middle of the smallest cap holding them all (so
+ *  nothing falls off the far side), nudged toward where the answer's weight is, then backed off until
+ *  the farthest point fits with some padding. */
+export function fitView(points: LL[], minAlt = 0.6, maxAlt = 2.6, centreOn: LL[] = points, lean = 0.22): { lat: number; lng: number; altitude: number } | null {
   if (!points.length) return null
+  let c = capCentre(points).c
   const base = centreOn.length ? centreOn : points
   const sum = base.reduce((s, p) => { const v = vec(p); return [s[0] + v[0], s[1] + v[1], s[2] + v[2]] }, [0, 0, 0])
-  const c = Math.hypot(sum[0], sum[1], sum[2]) < 1e-3 ? base[0] : fromVec(sum)
+  if (Math.hypot(sum[0], sum[1], sum[2]) > 1e-3) c = between(c, fromVec(sum), lean)
   const theta = Math.max(...points.map(p => arcDeg(c, p)))
-  // a point theta away from the view centre appears phi off-axis; keep phi inside ~19 degrees (fov 50)
+  // a point theta away from the view centre appears phi off-axis; keep phi inside ~17 degrees (fov 50)
   const t = Math.min(90, theta) * RAD
-  const alt = Math.cos(t) + Math.sin(t) / Math.tan(19 * RAD) - 1
-  // tilt the centre a little south so labels (drawn to the right / below) are not cut by the top bar
-  return { lat: c.lat - 2, lng: c.lng, altitude: Math.max(minAlt, Math.min(maxAlt, theta > 90 ? maxAlt : alt + 0.15)) }
+  const alt = Math.cos(t) + Math.sin(t) / Math.tan(17 * RAD) - 1
+  // a slight tilt: look from a little south, so arcs (which bulge up and out) and labels clear the top bar
+  return { lat: Math.max(-70, Math.min(70, c.lat - 4)), lng: c.lng, altitude: Math.max(minAlt, Math.min(maxAlt, theta > 90 ? maxAlt : alt + 0.12)) }
+}
+
+function capCentre(points: LL[]): { c: LL; r: number } {
+  let c = points[0]
+  for (let i = 1; i < 120; i++) {
+    let far = c, best = -1
+    for (const p of points) { const d = arcDeg(c, p); if (d > best) { best = d; far = p } }
+    if (best < 1e-6) break
+    c = between(c, far, 1 / (i + 1))
+  }
+  return { c, r: Math.max(...points.map(p => arcDeg(c, p))) }
+}
+
+/** Frame a list of things in order of importance. A globe camera only sees ~74 degrees around its
+ *  centre, so an answer spanning the whole world cannot all face us at once: the `must` items always
+ *  go in, then each next item joins only while everything still fits. */
+export function frameItems(items: { pts: LL[]; must?: boolean }[], minAlt = 0.6, maxAlt = 2.5, limit = 66) {
+  const inc: LL[] = []
+  for (const it of items) if (it.must) inc.push(...it.pts)
+  for (const it of items) {
+    if (it.must || !it.pts.length) continue
+    const next = [...inc, ...it.pts]
+    if (!inc.length || capCentre(next).r <= limit) inc.push(...it.pts)
+  }
+  return fitView(inc.length ? inc : items.flatMap(i => i.pts), minAlt, maxAlt)
+}
+
+// ---- continents, for the summary card (from each hub's country code) -------------------------
+const CONTINENT: Record<string, string> = {
+  CN: 'Asia', KR: 'Asia', TW: 'Asia', VN: 'Asia', SG: 'Asia', MY: 'Asia', LK: 'Asia', BD: 'Asia', IN: 'Asia', AE: 'Asia',
+  HK: 'Asia', ID: 'Asia', JP: 'Asia', TH: 'Asia', PH: 'Asia', EG: 'Africa', MA: 'Africa', ZA: 'Africa', ES: 'Europe',
+  NL: 'Europe', BE: 'Europe', DE: 'Europe', GB: 'Europe', FR: 'Europe', IT: 'Europe', PL: 'Europe', CH: 'Europe',
+  US: 'North America', CA: 'North America', MX: 'North America', BR: 'South America', AU: 'Oceania',
 }
 
 const KIND_ORDER: Record<NodeKind, number> = {
@@ -155,7 +197,11 @@ export function buildScene(graph: AskGraph, geo: GeoData, template?: string): Sc
     if (b) b.nodes.push(n)
     else buckets.push({ at: a.in, hub, closed, nodes: [n] })
   }
-  const few = buckets.length <= 14
+  const few = buckets.length <= 8
+  const personaOnly = graph.nodes.filter(n => n.kind === 'order').length <= 3     // a named order drawn on its own
+  // only the biggest groups keep their label on; the rest show it on hover
+  const bigGroups = new Set(buckets.map(b => b.nodes.find(n => n.kind === 'group')).filter((n): n is AskNode => !!n)
+    .sort((x, y) => (y.count ?? 0) - (x.count ?? 0)).slice(0, 4).map(n => n.id))
   const markers: Marker[] = buckets.map(b => {
     const nodes = [...b.nodes].sort((x, y) => (KIND_ORDER[x.kind] - KIND_ORDER[y.kind]) || ((x.rank ?? 99) - (y.rank ?? 99)) || (y.size - x.size))
     const node = nodes[0]
@@ -171,19 +217,26 @@ export function buildScene(graph: AskGraph, geo: GeoData, template?: string): Sc
     const extra = new Set(hubsHere.map(n => anchors.get(n.id)?.hubs[0] ?? n.id)).size - (HUB_KINDS.has(node.kind) ? 1 : 0)
     const label = node.kind === 'order' && orders.length > 1 ? `${node.label} +${orders.length - 1} more`
       : extra > 0 ? `${node.label} +${extra}` : node.label
-    const sub = node.blocked || (ring && node.kind === 'port') ? 'Closed' : node.metric?.label ?? null
-    const important = few || ring || node.kind === 'group' || (node.rank ?? 99) <= 3 || HUB_KINDS.has(node.kind) && node.size >= 2.5
+    // the closed place says when: "Closed Oct 20–24" (dates from the disruption itself)
+    const ev = nodes.map(n => geo.events?.[n.id]).find(Boolean)
+    const closedFor = ev ? `Closed ${shortRange(ev.start, ev.end)}` : 'Closed'
+    const sub = node.blocked || (ring && (node.kind === 'port' || node.kind === 'airport' || node.kind === 'event')) ? closedFor : node.metric?.label ?? null
+    const important = few || ring || bigGroups.has(node.id) || (node.kind === 'order' && personaOnly)
+      || (node.kind !== 'group' && (node.rank ?? 99) <= 3) || HUB_KINDS.has(node.kind) && node.size >= 2.5
+    const icon: MarkerIcon = node.kind === 'shipment' ? 'place' : node.kind
+    // how much this marker matters, for which label wins when two would overlap
+    const weight = node.kind === 'group' ? node.count ?? 1 : node.metric?.value ?? node.size
     return {
       key: `m:${nodes.map(n => n.id).join('|')}`, at: b.at, node, nodes, ids: nodes.map(n => n.id), tone: node.tone,
-      size, label, sub, count, important, ring, step: Math.min(...nodes.map(n => n.step ?? 0)),
+      size, label, sub, count, important, ring, step: Math.min(...nodes.map(n => n.step ?? 0)), icon, weight,
     }
   })
-  // label priority (the globe hides labels that would overlap one placed before them)
-  const named = markers.filter(m => m.node.kind === 'order').length <= 3     // a persona's order, drawn on its own
-  const prio = (m: Marker) => (m.ring ? 0 : 1e9)
-    + (m.node.kind === 'group' ? 1e6 - (m.count ?? 0) : m.node.kind === 'order' && named ? 5e5 : 2e6)
-    + (m.node.rank ?? (m.node.size >= 2 ? 0 : 999)) * 10 - m.node.size
-  markers.sort((a, b) => prio(a) - prio(b))
+  // label priority (the globe hides or moves labels that would overlap one placed before them):
+  // the closed place, a persona's own order, then by metric (most orders / biggest figure first)
+  const named = markers.filter(m => m.node.kind === 'order').length <= 3
+  const tier = (m: Marker) => (m.ring ? 0 : m.node.kind === 'order' && named ? 1 : m.node.rank === 1 ? 2
+    : m.node.rank == null && HUB_KINDS.has(m.node.kind) && m.node.size >= 2 ? 2 : 3)
+  markers.sort((a, b) => (tier(a) - tier(b)) || (b.weight - a.weight) || ((a.node.rank ?? 999) - (b.node.rank ?? 999)))
 
   // 3. arcs: each shipment's legs, then the answer's links between places (skipping those a route already draws)
   const arcs: Arc[] = []
@@ -228,7 +281,12 @@ export function buildScene(graph: AskGraph, geo: GeoData, template?: string): Sc
     // places along the route the label may slide to when the middle of its longest leg is taken
     const legs = a.all.slice(1).map((p, i) => [a.all[i], p] as const).sort((x, y) => arcDeg(y[0], y[1]) - arcDeg(x[0], x[1]))
     const cands = [a.mid, ...legs.flatMap(([p, q]) => [0.28, 0.72, 0.5].map(t => between(p, q, t)))]
-    chips.push({ key: `c:${n.id}`, at: a.mid, cands, lead: lead ?? '', text: short(n.label, template === 'why_late' ? 28 : 24),
+    // two short lines: what it is, and where it goes ("Smart home devices" / "→ DC Daventry"); full text on hover
+    const m = n.label.match(/^(.*?)\s+(?:for|to)\s+(.+)$/)
+    const what = m ? m[1] : n.label
+    const where = m ? m[2].replace(/^Northwind\s+/, '').replace(/^Lumen\s+/, '') : ''
+    chips.push({ key: `c:${n.id}`, at: a.mid, cands, lead: lead ?? '', text: short(what, template === 'why_late' ? 26 : 22),
+                 sub: where ? `→ ${short(where, 24)}` : '', full: n.metric?.label ? `${n.label} · ${n.metric.label}` : n.label,
                  tone: n.tone, node: n, step: n.step ?? 0 })
   }
   const spots: Spot[] = []
@@ -244,4 +302,62 @@ export function buildScene(graph: AskGraph, geo: GeoData, template?: string): Sc
 
   const missing = graph.nodes.filter(n => !anchors.has(n.id)).length
   return { markers, arcs, chips, spots, anchors, steps, missing }
+}
+
+const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** "2026-10-20", "2026-10-24" -> "Oct 20–24" (or "Oct 30 – Nov 2"). */
+export function shortRange(a: string, b: string): string {
+  const [, am, ad] = a.split('-').map(Number), [, bm, bd] = b.split('-').map(Number)
+  if (!am || !bm) return ''
+  return am === bm ? `${MONTH[am - 1]} ${ad}–${bd}` : `${MONTH[am - 1]} ${ad} – ${MONTH[bm - 1]} ${bd}`
+}
+
+/** The corner card: counts read straight off the drawn answer (nodes, group counts, places), no new maths. */
+export function summarize(graph: AskGraph, scene: Scene, geo: GeoData, shown: (step: number) => boolean): string[] {
+  const nodes = graph.nodes.filter(n => scene.anchors.has(n.id) && shown(n.step ?? 0))
+  const parts: string[] = []
+  const closed = scene.markers.find(m => m.ring && shown(m.step))
+  if (closed) parts.push(`${closed.node.label} closed`)
+  const ships = nodes.filter(n => n.kind === 'shipment')
+  // "on the map": these are the shipments this answer draws, not every delayed shipment (the header's count)
+  if (ships.length) parts.push(`${ships.length} shipment${ships.length === 1 ? '' : 's'} on the map`)
+  const routes = new Set(graph.links.map(l => l.route).filter(r => r != null))
+  if (routes.size) parts.push(`${routes.size} way${routes.size === 1 ? '' : 's'} around`)
+  const orderGroups = nodes.filter(n => n.kind === 'group' && /order/.test(n.label))
+  const late = orderGroups.filter(n => n.tone !== 'good').reduce((s, n) => s + (n.count ?? 0), 0)
+    + nodes.filter(n => n.kind === 'order' && n.tone !== 'good').length
+  if (late) parts.push(`${late.toLocaleString('en-US')} late order${late === 1 ? '' : 's'}`)
+  const places = new Set(nodes.filter(n => HUB_KINDS.has(n.kind)).map(n => scene.anchors.get(n.id)?.hubs[0] ?? n.id)).size
+  if (!ships.length && !late && places) parts.push(`${places} place${places === 1 ? '' : 's'}`)
+  const continents = new Set<string>()
+  for (const n of nodes) {
+    for (const h of scene.anchors.get(n.id)?.hubs ?? []) {
+      const c = CONTINENT[geo.hubs[h]?.country ?? '']
+      if (c) continents.add(c)
+    }
+  }
+  if (continents.size > 1) parts.push(`${continents.size} continents`)
+  return parts
+}
+
+/** Ids a highlight names that the answer graph does not have: drawn as extra markers and arcs. */
+export function extraGraph(ids: string[], geo: GeoData): AskGraph {
+  const nodes: AskNode[] = []
+  for (const id of ids) {
+    const p = geo.places[id]
+    if (!p) continue
+    if (p.type === 'route') {
+      const a = geo.hubs[p.hubs[0]]?.name, b = geo.hubs[p.hubs[p.hubs.length - 1]]?.name
+      nodes.push({ id, kind: 'shipment', label: a && b ? `${id}: ${a} → ${b}` : id, tone: 'neutral', size: 1, why: [] })
+    } else {
+      const h = geo.hubs[p.hub]
+      const kind: NodeKind = /^(PRM|ORD|CUS)-/.test(id) ? 'order' : geo.events?.[id] ? 'event'
+        : h?.kind === 'port' ? 'port' : h?.kind === 'airport' ? 'airport' : h?.kind?.startsWith('dc_') ? 'warehouse'
+        : h?.kind === 'supplier' || h?.kind === 'factory' ? 'factory' : 'place'
+      const label = kind === 'order' ? (p.type === 'point' && p.customer ? `${p.customer}'s order` : id)
+        : kind === 'event' ? geo.events?.[id]?.name ?? id : h?.name ?? id
+      nodes.push({ id, kind, label, tone: 'neutral', size: kind === 'order' ? 1 : 1.6, why: h ? [`${label}${kind === 'order' ? `, ${h.name}` : ''}.`] : [] })
+    }
+  }
+  return { nodes, links: [], truncated: false }
 }

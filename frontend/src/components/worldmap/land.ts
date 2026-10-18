@@ -26,3 +26,15 @@ export function landFeatures(): object[] {
   cache = out
   return cache
 }
+
+let borders: [number, number][][] | null = null
+/** Every country outline as a [lng, lat] ring, for the faint borders. */
+export function borderPaths(): [number, number][][] {
+  if (borders) return borders
+  borders = []
+  for (const f of landFeatures() as Feature<Polygon | MultiPolygon>[]) {
+    const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates
+    for (const poly of polys) for (const ring of poly) borders.push(ring.map(p => [p[0], p[1]] as [number, number]))
+  }
+  return borders
+}

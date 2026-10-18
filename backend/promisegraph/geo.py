@@ -19,16 +19,19 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from . import falkor_store as fs
-from .config import graph_name
+from .config import graph_name, to_date
 
 router = APIRouter()
 
 MAX_IDS = 600
 
-HUBS = "UNWIND $ids AS x MATCH (h:Hub {id: x}) RETURN h.id, h.name, h.kind, h.lat, h.lon"
+HUBS = "UNWIND $ids AS x MATCH (h:Hub {id: x}) RETURN h.id, h.name, h.kind, h.lat, h.lon, h.country"
 HUBS_BY_NAME = "UNWIND $names AS x MATCH (h:Hub {name: x}) RETURN h.name, h.id, h.kind, h.lat, h.lon"
 EVENTS = ("UNWIND $ids AS x MATCH (e:Event {id: x}) WITH e "
-          "MATCH (e)-[:AFFECTS]->(h:Hub) RETURN e.id, min(h.id)")
+          "MATCH (e)-[:AFFECTS]->(h:Hub) RETURN e.id, min(h.id), e.name, e.start_day, e.end_day")
+# the whole network, drawn faintly behind every answer
+NET_HUBS = "MATCH (h:Hub) RETURN h.id, h.name, h.kind, h.country, h.lat, h.lon ORDER BY h.id"
+NET_LANES = "MATCH (a:Hub)-[l:LANE]->(b:Hub) RETURN DISTINCT a.id, b.id, l.mode"
 # every leg of each shipment, in order: [from, to] per leg
 LEGS = ("UNWIND $ids AS x MATCH (s:Shipment {id: x}) WITH s "
         "MATCH (s)-[:USES]->(l:Leg) WITH s, l "
@@ -70,9 +73,10 @@ def resolve(g, ids: list[str], groups: dict[str, list[str]] | None = None) -> di
     def need_hubs(hub_ids):
         missing = [h for h in set(hub_ids) if h not in hubs]
         if missing:
-            for hid, name, kind, lat, lon in g.query(HUBS, {"ids": missing}).result_set:
+            for hid, name, kind, lat, lon, country in g.query(HUBS, {"ids": missing}).result_set:
                 if lat is not None and lon is not None:
-                    hubs[hid] = {"id": hid, "name": name, "kind": kind, "lat": float(lat), "lon": float(lon)}
+                    hubs[hid] = {"id": hid, "name": name, "kind": kind, "lat": float(lat), "lon": float(lon),
+                                 "country": country}
 
     base = {i: i.split("@", 1)[0] for i in ids}          # reroute stops: "APT-HKG@2" is APT-HKG
     need_hubs(base.values())
@@ -82,9 +86,15 @@ def resolve(g, ids: list[str], groups: dict[str, list[str]] | None = None) -> di
             places[i] = {"type": "point", "hub": base[i]}
     rest = [i for i in ids if i not in places]
 
-    # events -> the hub they close
+    # events -> the hub they close (and when, for the "Closed Oct 20-24" badge)
+    events: dict[str, dict] = {}
     if rest:
-        ev = {e: h for e, h in g.query(EVENTS, {"ids": rest}).result_set if h}
+        ev = {}
+        for e, h, name, start, end in g.query(EVENTS, {"ids": rest}).result_set:
+            if h:
+                ev[e] = h
+                events[e] = {"name": name, "hub": h, "start": to_date(int(start)).isoformat(),
+                             "end": to_date(int(end)).isoformat()}
         need_hubs(ev.values())
         for e, h in ev.items():
             if h in hubs:
@@ -125,7 +135,8 @@ def resolve(g, ids: list[str], groups: dict[str, list[str]] | None = None) -> di
             if lat is None or lon is None:
                 continue
             # a city name can be both a zone and a DC town: prefer the zone for city-, the DC for wh-
-            by_name.setdefault(name, []).append({"id": hid, "name": name, "kind": kind, "lat": float(lat), "lon": float(lon)})
+            by_name.setdefault(name, []).append({"id": hid, "name": name, "kind": kind, "lat": float(lat), "lon": float(lon),
+                                                 "country": None})
         for i, name in named.items():
             cands = by_name.get(name) or []
             if not cands:
@@ -149,7 +160,22 @@ def resolve(g, ids: list[str], groups: dict[str, list[str]] | None = None) -> di
     used = {p["hub"] for p in places.values() if "hub" in p}
     used |= {h for p in places.values() for h in p.get("hubs", [])}
     used |= {z for p in places.values() for z, _n in p.get("zones", [])}
-    return {"hubs": {h: hubs[h] for h in used if h in hubs}, "places": places}
+    return {"hubs": {h: hubs[h] for h in used if h in hubs}, "places": places, "events": events}
+
+
+@router.get("/api/{tenant}/geo/network")
+def network(tenant: str):
+    """Every hub and lane, for the faint backdrop of the globe (one call per company)."""
+    g = _graph(tenant)
+    hubs = [{"id": i, "name": n, "kind": k, "country": c, "lat": float(la), "lon": float(lo)}
+            for i, n, k, c, la, lo in g.query(NET_HUBS).result_set if la is not None and lo is not None]
+    seen, lanes = set(), []
+    for a, b, mode in g.query(NET_LANES).result_set:
+        key = (min(a, b), max(a, b))
+        if key not in seen:
+            seen.add(key)
+            lanes.append([a, b, mode])
+    return {"hubs": hubs, "lanes": lanes}
 
 
 @router.post("/api/{tenant}/geo")

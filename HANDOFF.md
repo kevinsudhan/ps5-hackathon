@@ -50,6 +50,24 @@ npm --prefix frontend run dev             # http://localhost:5173
 The data lives in Docker volumes, so after a restart you only need `docker compose up -d`.
 `python -m scripts.load` is only needed on a fresh machine.
 
+## What changed on Oct 18 (afternoon): globe, timeline, agents view, step by step
+
+The stage's view switch is now **Diagram / Globe / Timeline / Agents** (the old 3D node view is no longer offered).
+
+* **Globe** (`WorldMap.tsx`, `lib/geoScene.ts`, `backend/promisegraph/geo.py`): the answer on a dotted globe
+  (globe.gl) with real port coordinates. Singapore shows a pulsing "Closed Oct 20-24" badge, shipments are arcs
+  sized by impact, late orders are count bubbles, and a faint backdrop shows every port and lane. The corner card
+  counts what the map draws. The story also plays on the globe.
+* **Timeline** (why-late answers only; `OrderTimeline.tsx`, `timeline.py`): the chain on a calendar. Each step's
+  planned trip, "+N days late here", buffer that soaked up delay, and the promised date vs the new arrival.
+* **Agents** (once a run exists; `AgentRunGraph.tsx`, `runviz.py`): the run as handoffs. Memory (past runs,
+  playbooks) sits above, world data below, and the approval and Comms write-back come at the end. It builds live.
+* **Step by step** (button in the stage, Diagram or Globe): splits the stage. On the right (`AgentTrace.tsx`,
+  `trace/`, `GET /runs/{id}/trace`) is how FalkorDB worked it out: what was asked, what it walked (with the
+  Cypher), what came back, the answer. After a run there's also each agent's question to the graph, the
+  FalkorDB feature it used, its result, memory and conclusion. Picking a step lights up its nodes on the left.
+  Good for the video: Globe + Step by step, then click through the agents' run.
+
 ## What changed on Oct 18: a query-driven console
 
 * **No graph until you ask.** The landing shows what happened (title, dates, four count-up figures) and a centred
@@ -154,6 +172,11 @@ The reset puts memory back to the 3 seeded past disruptions without reloading th
 
 ## Gotchas
 
+* **Run only one API process against a FalkorDB during the demo.** Clusters tag shipments with a shared
+  `:Impacted` label under a per-process lock. Two API processes on the same graph (or `uvicorn --workers 2`)
+  can interleave, and the landing then showed 741 orders instead of 755 for one load. The Docker image runs one
+  process. The extra `api-globe` / `api-agents` / `api-timeline` entries in `.claude/launch.json` were only for
+  parallel development; don't run them during the demo.
 * **The API's `--reload` can hang on Windows.** After a backend edit it logged "Reloading..." but kept
   serving the old code. If a backend change does not show up, stop and start the API.
 * **Gemini often returns 503** ("high demand"). The agents fall back to template wording, and the numbers

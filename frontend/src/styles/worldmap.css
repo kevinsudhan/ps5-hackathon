@@ -1,10 +1,37 @@
 /* The globe view (components/WorldMap.tsx). Colours come from tokens.css. */
 
 .wm { position: absolute; inset: 0; overflow: hidden; animation: fade var(--dur-2) var(--ease) both;
-  background: radial-gradient(ellipse at 50% 55%, rgba(63, 91, 141, 0.18), transparent 62%); }
+  background: radial-gradient(ellipse at 50% 52%, rgba(63, 91, 141, 0.22), rgba(23, 27, 51, 0) 64%); }
 .wm-globe { position: absolute; inset: 0; }
 .wm-globe canvas { display: block; outline: none; }
 .wm .scene-nav-info { display: none; }
+
+/* a quiet starfield behind the globe and a soft vignette over it */
+.wm-stars { position: absolute; inset: 0; pointer-events: none; opacity: 0.55;
+  background-image:
+    radial-gradient(1px 1px at 7% 18%, rgba(241, 238, 246, 0.8), transparent 60%),
+    radial-gradient(1px 1px at 16% 72%, rgba(241, 238, 246, 0.55), transparent 60%),
+    radial-gradient(1.2px 1.2px at 24% 38%, rgba(146, 161, 194, 0.9), transparent 60%),
+    radial-gradient(1px 1px at 33% 88%, rgba(241, 238, 246, 0.5), transparent 60%),
+    radial-gradient(1px 1px at 41% 9%, rgba(241, 238, 246, 0.7), transparent 60%),
+    radial-gradient(1.3px 1.3px at 58% 92%, rgba(146, 161, 194, 0.8), transparent 60%),
+    radial-gradient(1px 1px at 66% 14%, rgba(241, 238, 246, 0.6), transparent 60%),
+    radial-gradient(1px 1px at 74% 64%, rgba(241, 238, 246, 0.45), transparent 60%),
+    radial-gradient(1.2px 1.2px at 83% 30%, rgba(146, 161, 194, 0.85), transparent 60%),
+    radial-gradient(1px 1px at 91% 80%, rgba(241, 238, 246, 0.6), transparent 60%),
+    radial-gradient(1px 1px at 96% 8%, rgba(241, 238, 246, 0.5), transparent 60%),
+    radial-gradient(1px 1px at 3% 52%, rgba(146, 161, 194, 0.6), transparent 60%);
+  background-size: 100% 100%; }
+.wm-stars::after { content: ''; position: absolute; inset: 0; opacity: 0.7;
+  background-image:
+    radial-gradient(1px 1px at 12% 44%, rgba(241, 238, 246, 0.5), transparent 60%),
+    radial-gradient(1px 1px at 29% 61%, rgba(241, 238, 246, 0.4), transparent 60%),
+    radial-gradient(1px 1px at 47% 76%, rgba(146, 161, 194, 0.6), transparent 60%),
+    radial-gradient(1px 1px at 62% 41%, rgba(241, 238, 246, 0.35), transparent 60%),
+    radial-gradient(1px 1px at 79% 49%, rgba(241, 238, 246, 0.45), transparent 60%),
+    radial-gradient(1px 1px at 88% 58%, rgba(146, 161, 194, 0.5), transparent 60%); }
+.wm-vignette { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, transparent 58%, rgba(14, 17, 34, 0.55) 100%); }
 
 .wm-status { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 5;
   display: inline-flex; gap: 8px; align-items: center; padding: 6px 12px; border-radius: var(--radius-pill);
@@ -16,64 +43,103 @@
 .wm .tone-neutral { --tone: var(--other); --tone-text: var(--text-2); }
 .wm .tone-muted { --tone: var(--mauve); --tone-text: var(--text-2); }
 
-/* ---- markers: a dot on the place, its name beside it ---------------------------------------- */
+/* ---- markers: a dot (or icon) on the place, its name beside it -------------------------------- */
 .wm-mk { position: relative; width: 0; height: 0; transition: opacity var(--dur-2) var(--ease); }
 .wm-mk.wm-far { opacity: 0; pointer-events: none; }
 .wm-mk.wm-far * { pointer-events: none !important; }
-.wm-mk.dim { opacity: 0.32; }
+.wm-mk.dim { opacity: 0.22; }
 .wm-dot {
   position: absolute; left: calc(var(--sz) / -2); top: calc(var(--sz) / -2); width: var(--sz); height: var(--sz);
-  padding: 0; border: 0; border-radius: 50%; cursor: pointer; pointer-events: auto;
+  padding: 0; border: 0; border-radius: 50%; cursor: pointer; pointer-events: auto; z-index: 2;
   background: var(--tone);
-  box-shadow: 0 0 0 2px rgba(23, 27, 51, 0.92), 0 0 0 3px color-mix(in srgb, var(--tone) 55%, transparent), 0 0 16px color-mix(in srgb, var(--tone) 70%, transparent);
+  box-shadow: 0 0 0 2px rgba(23, 27, 51, 0.92), 0 0 0 3px color-mix(in srgb, var(--tone) 50%, transparent), 0 0 16px color-mix(in srgb, var(--tone) 65%, transparent);
   color: var(--text-on-accent); font: 700 10px/1 var(--font); letter-spacing: -0.02em; display: grid; place-items: center;
   transition: transform var(--dur-1) var(--ease);
 }
+.wm-dot svg { width: 66%; height: 66%; fill: none; stroke: #1E2340; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.wm-dot svg .fill { fill: #1E2340; stroke: none; }
 .wm-dot:hover, .wm-dot:focus-visible { transform: scale(1.18); outline: none; }
 .wm-dot:focus-visible { box-shadow: var(--focus-ring); }
-.wm-mk.group .wm-dot { font-size: 10.5px; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--tone) 70%, white), var(--tone) 70%); }
-.wm-mk.ring .wm-dot { box-shadow: 0 0 0 2px rgba(23, 27, 51, 0.92), 0 0 0 4px rgba(189, 108, 115, 0.55), 0 0 24px rgba(189, 108, 115, 0.8); }
+/* warehouses and DCs read as squares, ports and airports as badges, order groups as counted discs */
+.wm-mk.icon-warehouse .wm-dot, .wm-mk.icon-factory .wm-dot { border-radius: 5px; }
+.wm-mk.icon-order .wm-dot { box-shadow: 0 0 0 2px rgba(23, 27, 51, 0.92), 0 0 10px color-mix(in srgb, var(--tone) 70%, transparent); }
+.wm-mk.counted .wm-dot { font-size: 10.5px;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--tone) 65%, white), var(--tone) 72%);
+  box-shadow: 0 0 0 2px rgba(23, 27, 51, 0.92), 0 0 0 4px color-mix(in srgb, var(--tone) 35%, transparent), 0 0 20px color-mix(in srgb, var(--tone) 60%, transparent); }
+.wm-mk.ring .wm-dot { box-shadow: 0 0 0 2px rgba(23, 27, 51, 0.92), 0 0 0 4px rgba(189, 108, 115, 0.6), 0 0 26px rgba(189, 108, 115, 0.85); }
+.wm-mk.hl .wm-dot { transform: scale(1.15); box-shadow: 0 0 0 2px rgba(23, 27, 51, 0.92), 0 0 0 4px rgba(146, 161, 194, 0.75), 0 0 22px rgba(146, 161, 194, 0.7); }
+.wm-mk.extra .wm-dot { background: var(--periwinkle); }
 
 .wm-label {
-  position: absolute; left: calc(var(--sz) / 2 + 7px); top: 0; transform: translateY(-50%);
+  --dy: 0px;
+  position: absolute; left: calc(var(--sz) / 2 + 7px); top: 0; transform: translateY(calc(-50% + var(--dy))); z-index: 1;
   display: grid; gap: 1px; padding: 3px 8px 4px; border-radius: 7px; white-space: nowrap; cursor: pointer;
-  background: rgba(23, 27, 51, 0.8); border: 1px solid var(--border); backdrop-filter: blur(6px);
+  background: rgba(23, 27, 51, 0.82); border: 1px solid var(--border); backdrop-filter: blur(6px);
+  box-shadow: 0 6px 18px rgba(9, 11, 26, 0.35);
   font-size: 11.5px; line-height: 1.25; color: var(--text); pointer-events: none;
   opacity: 0; transition: opacity var(--dur-1) var(--ease);
 }
 .wm-label b { font-weight: 650; }
 .wm-label small { font-size: 10.5px; color: var(--tone-text); font-weight: 600; }
-.wm-mk.label-on .wm-label { opacity: 1; pointer-events: auto; }
 .wm-mk.flip .wm-label { left: auto; right: calc(var(--sz) / 2 + 7px); text-align: right; }
+.wm-mk.label-on .wm-label { opacity: 1; pointer-events: auto; }
 .wm-mk.crowded .wm-label { opacity: 0; pointer-events: none; }
 .wm-mk:hover .wm-label, .wm-mk.crowded:hover .wm-label { opacity: 1; pointer-events: auto; }
 .wm-mk:hover { z-index: 999999 !important; }
+/* the closed place: a red badge with the dates */
+.wm-mk.ring .wm-label { border-color: rgba(189, 108, 115, 0.6); background: rgba(46, 24, 40, 0.88); }
+.wm-mk.ring .wm-label small { display: inline-block; justify-self: start; margin-top: 2px; padding: 1px 6px; border-radius: var(--radius-pill);
+  background: var(--danger); color: #1E2340; font-weight: 750; letter-spacing: 0.01em; }
+.wm-mk.ring.flip .wm-label small { justify-self: end; }
+/* a leader line when the label had to move up or down */
+.wm-lead { position: absolute; left: 0; top: 0; height: 1px; width: 0; transform-origin: 0 50%; pointer-events: none;
+  background: color-mix(in srgb, var(--tone) 55%, transparent); opacity: 0; }
+.wm-mk.led.label-on:not(.crowded) .wm-lead { opacity: 1; }
 
-/* ---- hop labels on a chain ("+8d Radio modules") -------------------------------------------- */
+/* ---- hop labels on a chain ("+5d Smart home devices / → DC Daventry") ------------------------- */
 .wm-chip-at { position: relative; width: 0; height: 0; }
 .wm-chip-at.wm-far .wm-chip, .wm-chip-at.crowded .wm-chip { opacity: 0; pointer-events: none; }
 .wm-chip {
   position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
-  display: inline-flex; gap: 6px; align-items: baseline; padding: 3px 8px; border-radius: var(--radius-pill);
-  background: rgba(23, 27, 51, 0.84); border: 1px solid color-mix(in srgb, var(--tone) 55%, transparent);
-  color: var(--text); font: 600 11px/1.3 var(--font); white-space: nowrap; cursor: pointer; pointer-events: auto;
+  display: inline-flex; gap: 7px; align-items: center; padding: 4px 9px 4px 7px; border-radius: 9px;
+  background: rgba(23, 27, 51, 0.86); border: 1px solid color-mix(in srgb, var(--tone) 55%, transparent);
+  box-shadow: 0 6px 18px rgba(9, 11, 26, 0.35);
+  color: var(--text); font: 600 11px/1.25 var(--font); white-space: nowrap; cursor: pointer; pointer-events: auto; text-align: left;
   transition: opacity var(--dur-2) var(--ease);
 }
-.wm-chip b { color: var(--tone-text); font-weight: 750; }
+.wm-chip b { color: #1E2340; background: var(--tone); font-weight: 800; padding: 2px 5px; border-radius: 6px; font-size: 11px; }
+.wm-chip-text { display: grid; }
+.wm-chip-text small { font-size: 10px; font-weight: 500; color: var(--text-2); }
+
+/* ---- the corner card ------------------------------------------------------------------------- */
+.wm-summary { position: absolute; right: 16px; top: 50px; z-index: 4; display: grid; justify-items: end; gap: 3px;
+  padding: 8px 12px; border-radius: var(--radius-md); background: rgba(23, 27, 51, 0.72); border: 1px solid var(--border);
+  backdrop-filter: var(--blur); font-size: var(--fs-xs); color: var(--text-2); pointer-events: none; animation: fade var(--dur-3) var(--ease) both; }
+.wm-summary span { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wm-summary b { color: var(--text); font-weight: 700; }
+.wm-summary span.closed { color: var(--danger-text); font-weight: 650; display: inline-flex; align-items: center; gap: 6px; }
+.wm-summary span.closed::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 3px rgba(189, 108, 115, 0.3); }
+.wm.highlighting .wm-summary { opacity: 0.35; }
+.wm.highlighting .wm-legend { display: none; }      /* the stage shows the step's label there */
 
 /* ---- tooltips (globe.gl's float-tooltip) ------------------------------------------------------ */
 .wm .float-tooltip-kap { background: none !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; }
 .wm-tip { padding: 5px 9px; border-radius: 7px; background: var(--surface-raised); border: 1px solid var(--border-strong);
   color: var(--text); font: 500 12px/1.4 var(--font); box-shadow: var(--shadow-2); max-width: 320px; white-space: normal; }
 
-/* ---- legend keys -------------------------------------------------------------------------------- */
-.wm-legend { max-width: calc(100% - 140px); }
+/* ---- legend ------------------------------------------------------------------------------------ */
+.wm-legend { max-width: calc(100% - 140px); background: rgba(23, 27, 51, 0.62); }
 .wm-key { display: inline-block; flex: none; }
-.wm-key.line { width: 16px; height: 3px; border-radius: 2px; background: var(--tone); box-shadow: 0 0 6px var(--tone); }
-.wm-key.dashed { width: 16px; height: 0; border-top: 2px dashed var(--danger); }
+.wm-key.line { width: 18px; height: 3px; border-radius: 2px; background: linear-gradient(90deg, color-mix(in srgb, var(--tone) 40%, transparent), var(--tone)); box-shadow: 0 0 6px var(--tone); }
+.wm-key.dashed { width: 18px; height: 0; border-top: 2px dashed var(--danger); }
 .wm-key.ring { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 3px rgba(189, 108, 115, 0.35); }
-.wm-key.group { width: 12px; height: 12px; border-radius: 50%; background: var(--danger); opacity: 0.9; }
+.wm-key.icon { width: 14px; height: 14px; border-radius: 50%; background: var(--text-2); display: inline-grid; place-items: center; }
+.wm-key.icon svg { width: 72%; height: 72%; fill: none; stroke: #1E2340; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.wm-key.icon svg .fill { fill: #1E2340; stroke: none; }
+.wm-key.icon.warehouse, .wm-key.icon.factory { border-radius: 4px; }
+.wm-key.icon.group { background: radial-gradient(circle at 35% 30%, #e8a3a9, var(--danger) 72%); }
+.wm-key.icon.order { width: 9px; height: 9px; background: var(--danger); }
 
 @media (prefers-reduced-motion: reduce) {
-  .wm, .wm-mk, .wm-label, .wm-dot, .wm-chip { animation: none; transition: none; }
+  .wm, .wm-mk, .wm-label, .wm-dot, .wm-chip, .wm-summary { animation: none; transition: none; }
 }
