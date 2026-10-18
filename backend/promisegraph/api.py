@@ -274,6 +274,15 @@ def _not_understood(_request, ex: _NotUnderstood):
     return JSONResponse(status_code=422, content={"detail": ex.detail, "suggestions": ex.suggestions})
 
 
+@app.exception_handler(ps.psycopg.OperationalError)
+def _no_postgres(_request, _ex):
+    # The free hosting image (Dockerfile.render) runs FalkorDB only; Postgres is just the baseline.
+    return JSONResponse(status_code=503, content={"detail": (
+        "The PostgreSQL baseline isn't running on this deployment, which hosts FalkorDB only. "
+        "The engine switch, Compare engines and Benchmark need it: run the app with docker compose "
+        "to try them.")})
+
+
 def _interpret(g, question: str, tenant: str):
     ctx = questions.context(g)
     try:

@@ -1,0 +1,44 @@
+# Free hosting on Render: FalkorDB and the app in ONE container, no Postgres (Blueprint: render.yaml).
+# A free Render web service is a single container (512 MB, shared CPU, no private services, no disk),
+# so FalkorDB runs inside it on 127.0.0.1 and the demo data is loaded at BUILD time into dump.rdb:
+# a cold start only reads the snapshot instead of generating 23k orders on a tenth of a CPU.
+# Agent runs made on the live site last until Render restarts or spins it down, which puts the demo
+# back to its seeded state. Without Postgres, the engine switch, Compare engines and Benchmark get a
+# 503 that says why (api.py); everything else, agents and memory included, runs on FalkorDB.
+#
+#   docker build -f Dockerfile.render -t promisegraph-render .
+#   docker run --rm -p 8080:10000 --memory 512m --cpus 0.1 promisegraph-render   ->  http://localhost:8080
+
+FROM falkordb/falkordb@sha256:107455e862a824e45e8e9f5a7fbfdf5e00a08b14e13eae2577c72fd9e3f59ba6 AS falkordb
+
+FROM node:22-alpine AS web
+WORKDIR /web
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
+FROM python:3.12-slim
+ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    FALKOR_HOST=127.0.0.1 FALKOR_PORT=6379 \
+    FALKORDB_ARGS="MAX_QUEUED_QUERIES 25 TIMEOUT 1000 RESULTSET_SIZE 10000"
+# Same Debian (trixie) as the FalkorDB image, so its binaries only need libstdc++ on top of slim.
+RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=falkordb /usr/local/bin/redis-server /usr/local/bin/redis-cli /usr/local/bin/
+COPY --from=falkordb /var/lib/falkordb/bin/falkordb.so /opt/falkordb/falkordb.so
+RUN ! ldd /usr/local/bin/redis-server /opt/falkordb/falkordb.so | grep "not found"
+
+WORKDIR /app/backend
+COPY backend/requirements.txt ./
+RUN pip install -r requirements.txt
+COPY backend/ ./
+COPY --from=web /web/dist /app/frontend/dist
+COPY deploy/render-start.sh /app/start.sh
+RUN sed -i 's/\r$//' /app/start.sh && chmod +x /app/start.sh
+
+# Both demo companies, agent memory and the seeded history, saved to /data/dump.rdb.
+RUN mkdir -p /data && /app/start.sh --bake
+
+EXPOSE 10000
+CMD ["/app/start.sh"]

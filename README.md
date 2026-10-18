@@ -85,6 +85,11 @@ frontend on one origin; point it at another FalkorDB (e.g. FalkorDB Cloud) with 
 `FALKOR_PORT`, `FALKOR_USERNAME` and `FALKOR_PASSWORD`, and at Postgres with `PG_DSN` (only the
 engine switch, Compare and Benchmark need it).
 
+Free hosting on Render: `render.yaml` (Render dashboard, New > Blueprint) builds `Dockerfile.render`, one
+container with FalkorDB inside and the demo data baked in (cold start ~25 s on 512 MB / 0.1 CPU). It has no
+Postgres, so the engine switch, Compare engines and Benchmark answer "not on this deployment"; agents and
+memory work, and a restart puts the demo memory back to its seeded state.
+
 Run the agents from the command line:
 
 ```bash

@@ -1,0 +1,13 @@
+# Render Blueprint, free plan: one Docker web service with FalkorDB, the API and the UI (no Postgres).
+# Render dashboard: New > Blueprint, pick this repo and the branch this file is on. See Dockerfile.render.
+# Optional: add GEMINI_API_KEY under the service's Environment for nicer agent wording.
+services:
+  - type: web
+    name: promise-graph
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeploy: true
