@@ -120,7 +120,7 @@ export function GraphStage({ graph, animKey, loading, title, reveal, focus, flyK
         <ThreeBoundary onFail={() => onView('2d')}>
           <Suspense fallback={<div className="stage-empty"><span className="spinner" /></div>}>
             <WorldMap tenant={tenant} graph={graph} animKey={animKey} template={answer?.template} reduced={reduced} story={story}
-              reveal={reveal} focus={focus} flyKey={flyKey} onPick={onPick} highlight={split ? hl : null} />
+              reveal={reveal} focus={focus} flyKey={flyKey} onPick={onPick} highlight={split ? hl : null} run={run} />
           </Suspense>
         </ThreeBoundary>
       )}

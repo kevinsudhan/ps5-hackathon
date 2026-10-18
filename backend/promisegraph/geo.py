@@ -182,3 +182,48 @@ def network(tenant: str):
 def geo(tenant: str, body: GeoBody):
     groups = {k: v[:40] for k, v in list(body.groups.items())[:80]}
     return resolve(_graph(tenant), body.ids, groups)
+
+
+# ---- the agents walking the graph (the globe's "watch the agents") ---------------------------
+RUN_STEPS = ("MATCH (:Run {id: $run})<-[:PART_OF]-(d:Decision)<-[:MADE]-(a:Agent) "
+             "RETURN d.id, d.seq, a.id, d.kind, d.status, d.summary ORDER BY d.seq")
+RUN_EVIDENCE = ("MATCH (:Run {id: $run})<-[:PART_OF]-(d:Decision)-[:EVIDENCE]->(n) "
+                "RETURN d.id, labels(n)[0], n.id")
+# a past run the Sentinel recalled is drawn at the place its disruption closed
+PAST_EVENT = "UNWIND $ids AS x MATCH (r:Run {id: x})-[:ABOUT]->(e:Event) RETURN r.id, e.id"
+RUN_ROUTES = ("MATCH (:Run {id: $run})<-[:PART_OF]-(d:Decision)-[rel:PROPOSES|CHOOSES]->(o:RouteOption) "
+              "RETURN d.id, type(rel), o.id, o.root, o.option, o.hubs, o.modes, o.days")
+RUN_CLOSED = "MATCH (:Run {id: $run})-[:ABOUT]->(:Event)-[:AFFECTS]->(h:Hub) RETURN h.id"
+
+
+@router.get("/api/{tenant}/geo/run/{run_id}")
+def run_walk(tenant: str, run_id: str):
+    """Each agent's step of one run, in handoff order, with what it read or wrote placed on the map:
+    its EVIDENCE nodes (past runs drawn at their disruption) and the route options it proposed or chose.
+    Everything comes from the run's own nodes and edges; nothing is recomputed."""
+    g = _graph(tenant)
+    p = {"run": run_id}
+    rows = g.query(RUN_STEPS, p).result_set
+    if not rows:
+        raise HTTPException(404, f"unknown run {run_id!r}")
+    ev: dict[str, list[str]] = {}
+    past_runs = set()
+    for did, label, nid in g.query(RUN_EVIDENCE, p).result_set:
+        if label == "Run":
+            past_runs.add(nid)
+        ev.setdefault(did, []).append(nid)
+    past = dict(g.query(PAST_EVENT, {"ids": sorted(past_runs)}).result_set) if past_runs else {}
+    routes: dict[str, list[dict]] = {}
+    for did, rel, oid, root, option, hubs, modes, days in g.query(RUN_ROUTES, p).result_set:
+        routes.setdefault(did, []).append({"id": oid, "root": root, "option": option, "hubs": list(hubs or []),
+                                           "modes": list(modes or []), "days": days, "chosen": rel == "CHOOSES"})
+    closed = [h for (h,) in g.query(RUN_CLOSED, p).result_set]
+    steps, ids = [], set(closed)
+    for did, seq, agent, kind, status, summary in rows:
+        evid = list(dict.fromkeys(past.get(x, x) for x in ev.get(did, [])))[:60]
+        ids.update(evid)
+        for r in routes.get(did, []):
+            ids.update(r["hubs"])
+        steps.append({"id": did, "seq": seq, "agent": agent, "kind": kind, "status": status, "summary": summary,
+                      "ids": evid, "routes": routes.get(did, [])})
+    return {"run": run_id, "closed": closed, "steps": steps, "geo": resolve(g, sorted(ids))}

@@ -119,7 +119,7 @@
 .wm-summary b { color: var(--text); font-weight: 700; }
 .wm-summary span.closed { color: var(--danger-text); font-weight: 650; display: inline-flex; align-items: center; gap: 6px; }
 .wm-summary span.closed::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 3px rgba(189, 108, 115, 0.3); }
-.wm.highlighting .wm-summary { opacity: 0.35; }
+.wm.highlighting .wm-summary { animation: none; opacity: 0.35; }
 .wm.highlighting .wm-legend { display: none; }      /* the stage shows the step's label there */
 
 /* ---- tooltips (globe.gl's float-tooltip) ------------------------------------------------------ */
@@ -143,3 +143,25 @@
 @media (prefers-reduced-motion: reduce) {
   .wm, .wm-mk, .wm-label, .wm-dot, .wm-chip, .wm-summary { animation: none; transition: none; }
 }
+
+/* ---- the agents walking the graph ("Watch the agents", and the story's agents step) ------------- */
+.wm.walking .wm-mk:not(.ring) { opacity: 0.28; }
+.wm.walking .wm-mk:not(.ring) .wm-label, .wm.walking .wm-mk:not(.ring) .wm-lead { opacity: 0 !important; pointer-events: none; }
+.wm.walking .wm-chip-at, .wm.walking .wm-summary { animation: none; opacity: 0; visibility: hidden; }
+.wm-agent { position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; transition: opacity var(--dur-1) linear; will-change: transform; }
+.wm-agent::after { content: ''; position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%;
+  background: rgb(var(--agent-rgb)); box-shadow: 0 0 0 3px rgba(var(--agent-rgb), 0.35), 0 0 22px rgb(var(--agent-rgb)); }
+.wm-agent > div { position: absolute; left: 0; top: 0; transform: translate(-50%, calc(-100% - 12px));
+  display: inline-flex; gap: 6px; align-items: center; padding: 4px 9px; border-radius: var(--radius-pill); white-space: nowrap;
+  background: rgba(23, 27, 51, 0.92); border: 1px solid rgba(var(--agent-rgb), 0.85); color: rgb(var(--agent-rgb));
+  font: 700 11.5px/1 var(--font); box-shadow: 0 0 20px rgba(var(--agent-rgb), 0.45), 0 6px 18px rgba(9, 11, 26, 0.4); }
+.wm-agent-icon { width: 14px; height: 14px; flex: none; }
+.wm-walk-caption { position: absolute; left: 50%; top: 46px; transform: translateX(-50%); z-index: 6; max-width: min(640px, calc(100% - 40px));
+  display: flex; gap: 10px; align-items: baseline; padding: 8px 13px; border-radius: var(--radius-md);
+  background: rgba(23, 27, 51, 0.88); border: 1px solid rgba(var(--agent-rgb), 0.6); backdrop-filter: var(--blur);
+  box-shadow: 0 0 24px rgba(var(--agent-rgb), 0.18), var(--shadow-2); font-size: var(--fs-sm); line-height: 1.4; color: var(--text);
+  animation: fade var(--dur-2) var(--ease) both; }
+.wm-walk-caption .who { display: inline-flex; gap: 6px; align-items: center; align-self: center; color: rgb(var(--agent-rgb)); font-weight: 750; white-space: nowrap; }
+.wm.story .wm-walk-caption { top: 14px; }
+.wm-walk-btn { position: absolute; right: 112px; bottom: 14px; z-index: 5; background: var(--surface-raised); backdrop-filter: var(--blur); }
+@media (prefers-reduced-motion: reduce) { .wm-agent { display: none; } }

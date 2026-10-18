@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import Globe, { type GlobeInstance } from 'globe.gl'
 import * as THREE from 'three'
-import type { AskGraph, Tone } from '../api/types'
+import type { AskGraph, Run, Tone } from '../api/types'
 import { TONE_RGB } from '../lib/format'
 import {
   arcDeg, between, buildScene, extraGraph, fitView, frameItems, geoRequest, summarize,
@@ -10,6 +10,9 @@ import {
 import { rgb, token } from '../lib/theme'
 import { useSize } from '../lib/useSize'
 import type { Pick } from './AnswerGraph'
+import AgentIcon from './agentgraph/AgentIcon'
+import type { Col } from './agentgraph/words'
+import { AGENT_NAME, AGENT_RGB, buildWalk, type WalkArc, type WalkData, type WalkRing } from './worldmap/agentWalk'
 import { borderPaths, landFeatures } from './worldmap/land'
 import '../styles/worldmap.css'
 
@@ -28,6 +31,8 @@ export interface WorldMapProps {
   onPick: (pick: Pick | null, at: { x: number; y: number }) => void
   /** Split view: graph ids a "Step by step" step touched; light these up (they may not be in `graph`). */
   highlight?: { key: string; ids: string[]; label?: string } | null
+  /** The agents' latest run, if any: the globe can replay it ("Watch the agents", and in the story). */
+  run?: Run | null
 }
 
 type GeoReq = { ids: string[]; groups: Record<string, string[]>; key: string }
@@ -68,7 +73,7 @@ type Path = { pts: [number, number][]; kind: 'lane' | 'border' }
 type PortLabel = { lat: number; lng: number; name: string }
 const NAMES_BELOW = 1.25          // camera altitude under which the network's port names appear
 
-export default function WorldMap({ tenant, graph, animKey, template, reduced, story, reveal = null, focus = null, flyKey = 0, onPick, highlight = null }: WorldMapProps) {
+export default function WorldMap({ tenant, graph, animKey, template, reduced, story, reveal = null, focus = null, flyKey = 0, onPick, highlight = null, run = null }: WorldMapProps) {
   const [boxRef, size] = useSize<HTMLDivElement>()
   const box = useRef<HTMLDivElement | null>(null)
   const setBox = useCallback((el: HTMLDivElement | null) => { box.current = el; boxRef(el) }, [boxRef])
@@ -112,6 +117,103 @@ export default function WorldMap({ tenant, graph, animKey, template, reduced, st
     return () => ctl.abort()
   }, [hlKey, scene, tenant]) // eslint-disable-line react-hooks/exhaustive-deps
   const hl = highlight && extra?.key === hlKey ? { ids: new Set(highlight.ids), extra: extra.scene } : null
+
+  // ---- the agents walking the graph: their latest run, replayed step by step ------------------------
+  const [walkData, setWalkData] = useState<WalkData | null>(null)
+  const runKey = run ? `${run.id}:${run.decisions.length}:${run.status}` : ''
+  useEffect(() => {
+    if (!run) { setWalkData(null); return }
+    const ctl = new AbortController()
+    fetch(`/api/${encodeURIComponent(tenant)}/geo/run/${encodeURIComponent(run.id)}`, { signal: ctl.signal })
+      .then(r => (r.ok ? (r.json() as Promise<WalkData>) : null)).then(d => setWalkData(d))
+      .catch(() => { /* no replay; everything else still works */ })
+    return () => ctl.abort()
+  }, [tenant, runKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [walking, setWalking] = useState(false)
+  const [walkLayer, setWalkLayer] = useState<{ arcs: WalkArc[]; rings: WalkRing[] }>({ arcs: [], rings: [] })
+  const [walkCaption, setWalkCaption] = useState<{ agent: string; text: string } | null>(null)
+  const [badgeAgent, setBadgeAgent] = useState<string | null>(null)
+  const walkTimers = useRef<number[]>([])
+  const badge = useRef<HTMLDivElement | null>(null)
+  const badgePath = useRef<{ pts: LL[]; t0: number; dur: number } | null>(null)
+  const stopWalk = useCallback(() => {
+    walkTimers.current.forEach(clearTimeout)
+    walkTimers.current = []
+    badgePath.current = null
+    setWalking(false)
+    setWalkLayer({ arcs: [], rings: [] })
+    setWalkCaption(null)
+    setBadgeAgent(null)
+  }, [])
+  const playWalk = useCallback(() => {
+    const g = globe.current
+    if (!walkData || !g) return
+    stopWalk()
+    const { beats, total, points, port } = buildWalk(walkData)
+    if (!beats.length) return
+    setWalking(true)
+    clearTimers()
+    g.controls().autoRotate = false
+    const pov = frameItems([{ pts: port ? [port] : [], must: true }, ...points.map(p => ({ pts: [p] }))], 0.8, 2.5)
+    walkTimers.current.push(window.setTimeout(() => { if (pov) g.pointOfView(pov, reduced ? 0 : 1200) }, 60))
+    const later = (fn: () => void, ms: number) => { walkTimers.current.push(window.setTimeout(fn, ms)) }
+    if (reduced) {
+      // no motion: every trail at once, then back to the answer
+      setWalkLayer({ arcs: beats.flatMap(b => b.arcs).filter(a => a.layer === 'base'), rings: [] })
+      setWalkCaption({ agent: beats[beats.length - 1].agent, text: "Everything the agents read and wrote in this run." })
+      later(stopWalk, 9000)
+      return
+    }
+    // the story gives the agents about ten seconds before it moves on: play faster there
+    const k = story ? Math.min(1, 9600 / total) : 1, lead = story ? 300 : 1100
+    for (const b of beats) {
+      later(() => {
+        if (b.arcs.length || b.rings.length) setWalkLayer(l => ({ arcs: [...l.arcs, ...b.arcs], rings: [...l.rings, ...b.rings] }))
+        if (b.rings.length) later(() => setWalkLayer(l => ({ ...l, rings: l.rings.filter(r => !b.rings.includes(r)) })), 1900 * k)
+        if (b.caption) setWalkCaption({ agent: b.agent, text: b.caption })
+        if (b.path) { badgePath.current = { pts: b.path.pts, t0: performance.now(), dur: b.path.dur * k }; setBadgeAgent(b.agent) }
+      }, lead + b.at * k)
+    }
+    later(stopWalk, lead + total * k + 3200)
+  }, [walkData, reduced, stopWalk, story]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => stopWalk, [animKey, stopWalk])
+  // the badge glides between the places its agent visits (screen-space, every frame)
+  useEffect(() => {
+    if (!walking) return
+    let raf = 0
+    const tick = () => {
+      const g = globe.current, el = badge.current, bp = badgePath.current
+      if (g && el && bp && bp.pts.length) {
+        const k = Math.min(1, (performance.now() - bp.t0) / Math.max(1, bp.dur))
+        const segs = bp.pts.length - 1
+        let p = bp.pts[0]
+        if (segs > 0) {
+          const x = k * segs, i = Math.min(segs - 1, Math.floor(x)), f = x - i
+          p = between(bp.pts[i], bp.pts[i + 1], f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2)
+        }
+        const view = g.pointOfView()
+        const s = g.getScreenCoords(p.lat, p.lng, 0.04)
+        el.style.transform = `translate(${Math.round(s.x)}px, ${Math.round(s.y)}px)`
+        el.style.opacity = arcDeg({ lat: view.lat, lng: view.lng }, p) < 78 ? '1' : '0'
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [walking])
+  // in the story: once the camera has flown to the persona, the agents take over with the run the story started
+  const storyRunAtStart = useRef<string | null | undefined>(undefined)
+  const playedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!story) { storyRunAtStart.current = undefined; playedFor.current = null; stopWalk(); return }
+    if (storyRunAtStart.current === undefined) storyRunAtStart.current = run?.id ?? null
+  }, [story]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!story || !flyKey || focus?.length || !run || !walkData || walkData.run !== run.id) return
+    if (run.id === storyRunAtStart.current || playedFor.current === run.id) return
+    playedFor.current = run.id
+    playWalk()
+  }, [story, flyKey, focus?.length, walkData]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const visible = useCallback((step: number) => !story || reveal == null || step <= reveal, [story, reveal])
   const focusKey = (focus ?? []).join('|')
@@ -158,7 +260,7 @@ export default function WorldMap({ tenant, graph, animKey, template, reduced, st
         else if (a.link) pickRef.current({ type: 'link', link: a.link }, at(e))
       })
       .ringLat(acc((m: Marker) => m.at.lat)).ringLng(acc((m: Marker) => m.at.lng)).ringAltitude(0.004)
-      .ringColor(() => (t: number) => `rgba(${TONE_RGB.danger}, ${(0.95 * Math.pow(1 - t, 1.6)).toFixed(3)})`)
+      .ringColor(acc((d: { rgb?: string }) => (t: number) => `rgba(${d.rgb ?? TONE_RGB.danger}, ${(0.95 * Math.pow(1 - t, 1.6)).toFixed(3)})`))
       .ringMaxRadius(7).ringPropagationSpeed(3.4).ringRepeatPeriod(900).ringResolution(72)
       .pointLat(acc((s: Spot) => s.at.lat)).pointLng(acc((s: Spot) => s.at.lng)).pointAltitude(0.004)
       .pointRadius(acc((s: Spot) => s.r)).pointColor(acc((s: Spot) => `rgba(${TONE_RGB[s.tone]}, 0.7)`))
@@ -229,22 +331,24 @@ export default function WorldMap({ tenant, graph, animKey, template, reduced, st
     if (!scene) { g.arcsData([]).ringsData([]).pointsData([]).htmlElementsData([]); return }
     const lit = hl ? hl.ids : new Set(focus ?? [])
     const isExtra = new Set<object>([...(hl?.extra.markers ?? []), ...(hl?.extra.arcs ?? []), ...(hl?.extra.chips ?? [])])
-    const on = (a: Arc) => !lit.size || isExtra.has(a) || (a.node ? lit.has(a.node.id) : a.ids.every(id => lit.has(id)))
-    const arcs = [...scene.arcs, ...(hl?.extra.arcs.slice(0, 300) ?? [])].filter(a => visible(a.step) && (!reduced || a.layer === 'base'))
+    const agentArc = (a: Arc): a is WalkArc => 'rgb' in a
+    const on = (a: Arc) => agentArc(a) || (!walking && (!lit.size || isExtra.has(a) || (a.node ? lit.has(a.node.id) : a.ids.every(id => lit.has(id)))))
+    const arcs = [...scene.arcs, ...(hl?.extra.arcs.slice(0, 300) ?? []), ...walkLayer.arcs].filter(a => visible(a.step) && (!reduced || a.layer === 'base'))
     g.arcColor(acc((a: Arc) => {
-      const c = a.blocked ? TONE_RGB.danger : TONE_RGB[a.tone]
+      const c = agentArc(a) ? a.rgb : a.blocked ? TONE_RGB.danger : TONE_RGB[a.tone]
       const k = on(a)
+      if (agentArc(a)) return a.layer === 'base' ? `rgba(${c}, 0.7)` : [`rgba(${c}, 0.7)`, `rgba(255, 255, 255, 0.95)`]
       if (a.blocked) return `rgba(${c}, ${k ? 0.95 : 0.25})`
       if (a.layer === 'base') return `rgba(${c}, ${reduced ? (k ? 0.9 : 0.18) : k ? 0.42 : 0.06})`
       return [`rgba(${c}, ${k ? 0.55 : 0.08})`, `rgba(${c}, ${k ? 1 : 0.14})`]
     }))
-      .arcStroke(acc((a: Arc) => (a.layer === 'flow' ? a.stroke : a.stroke * 0.6) * (lit.size && on(a) ? 1.45 : 1)))
+      .arcStroke(acc((a: Arc) => (a.layer === 'flow' ? a.stroke : a.stroke * 0.6) * (agentArc(a) ? 1.5 : lit.size && on(a) ? 1.45 : 1)))
       .arcDashLength(acc((a: Arc) => (a.blocked ? 0.022 : a.layer === 'flow' ? 0.09 : 1)))
       .arcDashGap(acc((a: Arc) => (a.blocked ? 0.022 : a.layer === 'flow' ? 0.27 : 0)))
       .arcDashAnimateTime(acc((a: Arc) => (reduced || a.layer === 'base' ? 0 : 3200)))
-      .arcsTransitionDuration(reduced ? 0 : 900)
+      .arcsTransitionDuration(reduced ? 0 : walking ? 700 : 900)
       .arcsData(arcs)
-    g.ringsData(reduced ? [] : scene.markers.filter(m => m.ring && visible(m.step)))
+    g.ringsData(reduced ? [] : [...scene.markers.filter(m => m.ring && visible(m.step)), ...walkLayer.rings])
     g.pointsTransitionDuration(0).pointsData(scene.spots.filter(s => visible(s.step)))
 
     const html: HtmlDatum[] = []
@@ -272,7 +376,7 @@ export default function WorldMap({ tenant, graph, animKey, template, reduced, st
       shownChips.current.push({ c, el: elements.current.get(c)! })
     }
     g.htmlTransitionDuration(reduced ? 0 : 600).htmlElementsData(html)
-  }, [scene, visible, focusKey, reduced, ready, story, template, hl?.extra]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scene, visible, focusKey, reduced, ready, story, template, hl?.extra, walkLayer, walking]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // stable wrapper objects for the HTML layer (and their elements)
   const wrappers = useRef(new WeakMap<object, HtmlDatum>())
@@ -505,7 +609,7 @@ export default function WorldMap({ tenant, graph, animKey, template, reduced, st
   const summary = useMemo(() => (scene && geo ? summarize(graph, scene, geo.data, visible) : []), [scene, geo, graph, visible])
 
   return (
-    <div className={`wm${story ? ' story' : ''}${hl ? ' highlighting' : ''}`} ref={setBox}>
+    <div className={`wm${story ? ' story' : ''}${hl ? ' highlighting' : ''}${walking ? ' walking' : ''}`} ref={setBox}>
       <div className="wm-stars" aria-hidden />
       <div className="wm-globe" ref={host} />
       <div className="wm-vignette" aria-hidden />
@@ -528,6 +632,21 @@ export default function WorldMap({ tenant, graph, animKey, template, reduced, st
           {legend.blocked && <span><i className="wm-key dashed" />closed way</span>}
           {scene.missing > 0 && <><span className="legend-sep" aria-hidden /><span>{scene.missing} not on the map</span></>}
         </div>
+      )}
+      {walking && badgeAgent && (
+        <div className="wm-agent" ref={badge} style={{ '--agent-rgb': AGENT_RGB[badgeAgent] } as CSSProperties} aria-hidden>
+          <div><AgentIcon col={badgeAgent as Col} className="wm-agent-icon" />{AGENT_NAME[badgeAgent] ?? badgeAgent}</div>
+        </div>
+      )}
+      {walkCaption && (
+        <div className="wm-walk-caption" role="status" style={{ '--agent-rgb': AGENT_RGB[walkCaption.agent] } as CSSProperties}>
+          <span className="who"><AgentIcon col={walkCaption.agent as Col} className="wm-agent-icon" />{AGENT_NAME[walkCaption.agent] ?? walkCaption.agent}</span>
+          <span className="what">{walkCaption.text}</span>
+        </div>
+      )}
+      {scene && !story && run && walkData && walkData.run === run.id && (
+        <button className="btn btn-sm wm-walk-btn" onClick={e => { e.stopPropagation(); if (walking) stopWalk(); else playWalk() }}
+          title="Replay the agents' run on the globe: what each one read and wrote in FalkorDB">{walking ? 'Stop' : '▶ Watch the agents'}</button>
       )}
       {scene && !story && (
         <button className="btn btn-sm stage-recentre"
