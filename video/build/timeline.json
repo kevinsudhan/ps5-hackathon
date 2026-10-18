@@ -1,0 +1,395 @@
+{
+ "bpm": 120,
+ "beat": 0.5,
+ "duration": 180.0,
+ "scenes": [
+  {
+   "id": "hook",
+   "music": "intro",
+   "start": 0.0,
+   "end": 11.0
+  },
+  {
+   "id": "logo",
+   "music": "impact",
+   "start": 11.0,
+   "end": 17.0
+  },
+  {
+   "id": "problem",
+   "music": "grooveA",
+   "start": 17.0,
+   "end": 30.0
+  },
+  {
+   "id": "model",
+   "music": "grooveA",
+   "start": 30.0,
+   "end": 43.0
+  },
+  {
+   "id": "answer",
+   "music": "grooveB",
+   "start": 43.0,
+   "end": 59.0
+  },
+  {
+   "id": "why",
+   "music": "grooveB",
+   "start": 59.0,
+   "end": 71.0
+  },
+  {
+   "id": "engines",
+   "music": "grooveB",
+   "start": 71.0,
+   "end": 80.0
+  },
+  {
+   "id": "agents",
+   "music": "drop",
+   "start": 80.0,
+   "end": 104.0
+  },
+  {
+   "id": "gate",
+   "music": "breakdown",
+   "start": 104.0,
+   "end": 114.0
+  },
+  {
+   "id": "memory",
+   "music": "tension",
+   "start": 114.0,
+   "end": 133.0
+  },
+  {
+   "id": "honest",
+   "music": "drop2",
+   "start": 133.0,
+   "end": 155.0
+  },
+  {
+   "id": "tracks",
+   "music": "grooveB",
+   "start": 155.0,
+   "end": 171.0
+  },
+  {
+   "id": "outro",
+   "music": "outro",
+   "start": 171.0,
+   "end": 180.0
+  }
+ ],
+ "vo": [
+  {
+   "id": "h1",
+   "scene": "hook",
+   "at": 0.7,
+   "dur": 1.392,
+   "text": "Every order is a promise."
+  },
+  {
+   "id": "h2",
+   "scene": "hook",
+   "at": 2.592,
+   "dur": 1.348,
+   "text": "A date you gave a customer."
+  },
+  {
+   "id": "h3",
+   "scene": "hook",
+   "at": 4.94,
+   "dur": 3.332,
+   "text": "So when a port shuts down, the question isn't which ships are stuck."
+  },
+  {
+   "id": "h4",
+   "scene": "hook",
+   "at": 8.5,
+   "dur": 1.556,
+   "text": "It's which promises just broke."
+  },
+  {
+   "id": "l1",
+   "scene": "logo",
+   "at": 11.4,
+   "dur": 1.179,
+   "text": "This is Promise Graph."
+  },
+  {
+   "id": "l2",
+   "scene": "logo",
+   "at": 12.879,
+   "dur": 2.604,
+   "text": "Agents with a memory, built on FalkorDB."
+  },
+  {
+   "id": "p1",
+   "scene": "problem",
+   "at": 17.2,
+   "dur": 2.301,
+   "text": "Singapore's terminals go dark for five days."
+  },
+  {
+   "id": "p2",
+   "scene": "problem",
+   "at": 19.801,
+   "dur": 6.861,
+   "text": "One stuck shipment holds up the next, and the next, five steps down the supply chain, until it reaches a customer's door."
+  },
+  {
+   "id": "p3",
+   "scene": "problem",
+   "at": 27.0,
+   "dur": 1.993,
+   "text": "That's a graph. So we built it as one."
+  },
+  {
+   "id": "m1",
+   "scene": "model",
+   "at": 30.2,
+   "dur": 5.234,
+   "text": "Customers, orders, promises and shipments, linked by what feeds what, in FalkorDB."
+  },
+  {
+   "id": "m2",
+   "scene": "model",
+   "at": 35.734,
+   "dur": 6.141,
+   "text": "One variable-length query follows the delay, hop by hop, and keeps every promise that now misses its date."
+  },
+  {
+   "id": "a1",
+   "scene": "answer",
+   "at": 43.2,
+   "dur": 5.232,
+   "text": "755 orders. $114,065 in late fees."
+  },
+  {
+   "id": "a2",
+   "scene": "answer",
+   "at": 48.732,
+   "dur": 3.545,
+   "text": "Each one traced back to a shipment stuck in Singapore, on the real map."
+  },
+  {
+   "id": "a3",
+   "scene": "answer",
+   "at": 52.577,
+   "dur": 5.91,
+   "text": "Ask in plain English. The AI only picks a template. FalkorDB answers, and shows its query."
+  },
+  {
+   "id": "w1",
+   "scene": "why",
+   "at": 59.0,
+   "dur": 1.451,
+   "text": "Why is Aisha's order late?"
+  },
+  {
+   "id": "w2",
+   "scene": "why",
+   "at": 60.751,
+   "dur": 4.957,
+   "text": "Here's her chain on a calendar: where each day of delay came from, and where buffer soaked some up."
+  },
+  {
+   "id": "w3",
+   "scene": "why",
+   "at": 66.5,
+   "dur": 2.683,
+   "text": "Turn on Step by step, and the graph shows its work."
+  },
+  {
+   "id": "e1",
+   "scene": "engines",
+   "at": 71.2,
+   "dur": 4.411,
+   "text": "Flip the engine to Postgres, and the same question comes back with the same rows."
+  },
+  {
+   "id": "e2",
+   "scene": "engines",
+   "at": 76.0,
+   "dur": 2.063,
+   "text": "Compare puts both queries side by side."
+  },
+  {
+   "id": "g1",
+   "scene": "agents",
+   "at": 80.2,
+   "dur": 3.147,
+   "text": "Then six agents take over, and they coordinate through the graph."
+  },
+  {
+   "id": "g2",
+   "scene": "agents",
+   "at": 84.0,
+   "dur": 1.996,
+   "text": "Sentinel ranks the port with betweenness."
+  },
+  {
+   "id": "g3",
+   "scene": "agents",
+   "at": 86.5,
+   "dur": 4.465,
+   "text": "The Impact Analyst follows the cascade, and splits it with connected components."
+  },
+  {
+   "id": "g4",
+   "scene": "agents",
+   "at": 91.5,
+   "dur": 2.769,
+   "text": "The Rerouter finds shortest paths around the closure."
+  },
+  {
+   "id": "g5",
+   "scene": "agents",
+   "at": 94.5,
+   "dur": 1.773,
+   "text": "Finance prices every rescue."
+  },
+  {
+   "id": "g6",
+   "scene": "agents",
+   "at": 96.5,
+   "dur": 2.008,
+   "text": "And the Verifier re-checks every number."
+  },
+  {
+   "id": "g7",
+   "scene": "agents",
+   "at": 98.808,
+   "dur": 3.481,
+   "text": "Each one reads the last decision from the graph, and writes its own."
+  },
+  {
+   "id": "k1",
+   "scene": "gate",
+   "at": 104.3,
+   "dur": 1.611,
+   "text": "Spending money needs a person,"
+  },
+  {
+   "id": "k2",
+   "scene": "gate",
+   "at": 106.011,
+   "dur": 1.546,
+   "text": "and whoever asked can't approve it."
+  },
+  {
+   "id": "k3",
+   "scene": "gate",
+   "at": 108.5,
+   "dur": 3.519,
+   "text": "Approved? Comms writes to the customers, and records how it went."
+  },
+  {
+   "id": "r1",
+   "scene": "memory",
+   "at": 114.2,
+   "dur": 1.582,
+   "text": "Because these agents remember."
+  },
+  {
+   "id": "r2",
+   "scene": "memory",
+   "at": 116.082,
+   "dur": 3.394,
+   "text": "In July, air-freighting containers around Suez didn't pay off."
+  },
+  {
+   "id": "r3",
+   "scene": "memory",
+   "at": 119.676,
+   "dur": 4.873,
+   "text": "So this time, Finance rescues three shipments by sea, for $19,180."
+  },
+  {
+   "id": "r4",
+   "scene": "memory",
+   "at": 125.0,
+   "dur": 3.994,
+   "text": "$68,257 saved. 406 orders back on time."
+  },
+  {
+   "id": "r5",
+   "scene": "memory",
+   "at": 129.294,
+   "dur": 2.727,
+   "text": "Every company gets its own graph, and its own memory."
+  },
+  {
+   "id": "b1",
+   "scene": "honest",
+   "at": 133.2,
+   "dur": 3.932,
+   "text": "We raced FalkorDB against a tuned Postgres with pgRouting."
+  },
+  {
+   "id": "b2",
+   "scene": "honest",
+   "at": 137.5,
+   "dur": 3.029,
+   "text": "Same data. Identical answers, checked row by row."
+  },
+  {
+   "id": "b3",
+   "scene": "honest",
+   "at": 140.729,
+   "dur": 6.276,
+   "text": "On the deep question, FalkorDB stays near 30 ms. Postgres climbs to around 100."
+  },
+  {
+   "id": "b4",
+   "scene": "honest",
+   "at": 147.5,
+   "dur": 2.72,
+   "text": "On clusters, pgRouting wins. We say so."
+  },
+  {
+   "id": "b5",
+   "scene": "honest",
+   "at": 150.52,
+   "dur": 3.319,
+   "text": "And we wrote minimal repros for three engine bugs we found."
+  },
+  {
+   "id": "t1",
+   "scene": "tracks",
+   "at": 155.3,
+   "dur": 2.827,
+   "text": "That's Track two: agent memory and coordination."
+  },
+  {
+   "id": "t2",
+   "scene": "tracks",
+   "at": 158.327,
+   "dur": 6.19,
+   "text": "Episodic, procedural and shared memory. Handoffs through the graph. A human gate. One graph per company."
+  },
+  {
+   "id": "t3",
+   "scene": "tracks",
+   "at": 164.817,
+   "dur": 4.721,
+   "text": "And Track one: multi-hop reasoning, with graph algorithms as the agents' tools."
+  },
+  {
+   "id": "o1",
+   "scene": "outro",
+   "at": 171.5,
+   "dur": 0.844,
+   "text": "Promise Graph."
+  },
+  {
+   "id": "o2",
+   "scene": "outro",
+   "at": 172.644,
+   "dur": 3.466,
+   "text": "Know which promises broke, why, and the cheapest way to keep them."
+  }
+ ]
+}

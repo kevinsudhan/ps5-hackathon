@@ -1,0 +1,176 @@
+1
+00:00:00,700 --> 00:00:02,342
+Every order is a promise.
+
+2
+00:00:02,592 --> 00:00:04,190
+A date you gave a customer.
+
+3
+00:00:04,940 --> 00:00:08,522
+So when a port shuts down, the question isn't which ships are stuck.
+
+4
+00:00:08,500 --> 00:00:10,306
+It's which promises just broke.
+
+5
+00:00:11,400 --> 00:00:12,829
+This is Promise Graph.
+
+6
+00:00:12,879 --> 00:00:15,733
+Agents with a memory, built on FalkorDB.
+
+7
+00:00:17,200 --> 00:00:19,751
+Singapore's terminals go dark for five days.
+
+8
+00:00:19,801 --> 00:00:26,912
+One stuck shipment holds up the next, and the next, five steps down the supply chain, until it reaches a customer's door.
+
+9
+00:00:27,000 --> 00:00:29,243
+That's a graph. So we built it as one.
+
+10
+00:00:30,200 --> 00:00:35,684
+Customers, orders, promises and shipments, linked by what feeds what, in FalkorDB.
+
+11
+00:00:35,734 --> 00:00:42,125
+One variable-length query follows the delay, hop by hop, and keeps every promise that now misses its date.
+
+12
+00:00:43,200 --> 00:00:48,682
+755 orders. $114,065 in late fees.
+
+13
+00:00:48,732 --> 00:00:52,527
+Each one traced back to a shipment stuck in Singapore, on the real map.
+
+14
+00:00:52,577 --> 00:00:58,737
+Ask in plain English. The AI only picks a template. FalkorDB answers, and shows its query.
+
+15
+00:00:59,000 --> 00:01:00,701
+Why is Aisha's order late?
+
+16
+00:01:00,751 --> 00:01:05,958
+Here's her chain on a calendar: where each day of delay came from, and where buffer soaked some up.
+
+17
+00:01:06,500 --> 00:01:09,433
+Turn on Step by step, and the graph shows its work.
+
+18
+00:01:11,200 --> 00:01:15,861
+Flip the engine to Postgres, and the same question comes back with the same rows.
+
+19
+00:01:16,000 --> 00:01:18,313
+Compare puts both queries side by side.
+
+20
+00:01:20,200 --> 00:01:23,597
+Then six agents take over, and they coordinate through the graph.
+
+21
+00:01:24,000 --> 00:01:26,246
+Sentinel ranks the port with betweenness.
+
+22
+00:01:26,500 --> 00:01:31,215
+The Impact Analyst follows the cascade, and splits it with connected components.
+
+23
+00:01:31,500 --> 00:01:34,519
+The Rerouter finds shortest paths around the closure.
+
+24
+00:01:34,500 --> 00:01:36,523
+Finance prices every rescue.
+
+25
+00:01:36,500 --> 00:01:38,758
+And the Verifier re-checks every number.
+
+26
+00:01:38,808 --> 00:01:42,539
+Each one reads the last decision from the graph, and writes its own.
+
+27
+00:01:44,300 --> 00:01:46,161
+Spending money needs a person,
+
+28
+00:01:46,011 --> 00:01:47,807
+and whoever asked can't approve it.
+
+29
+00:01:48,500 --> 00:01:52,269
+Approved? Comms writes to the customers, and records how it went.
+
+30
+00:01:54,200 --> 00:01:56,032
+Because these agents remember.
+
+31
+00:01:56,082 --> 00:01:59,726
+In July, air-freighting containers around Suez didn't pay off.
+
+32
+00:01:59,676 --> 00:02:04,799
+So this time, Finance rescues three shipments by sea, for $19,180.
+
+33
+00:02:05,000 --> 00:02:09,244
+$68,257 saved. 406 orders back on time.
+
+34
+00:02:09,294 --> 00:02:12,271
+Every company gets its own graph, and its own memory.
+
+35
+00:02:13,200 --> 00:02:17,382
+We raced FalkorDB against a tuned Postgres with pgRouting.
+
+36
+00:02:17,500 --> 00:02:20,779
+Same data. Identical answers, checked row by row.
+
+37
+00:02:20,729 --> 00:02:27,255
+On the deep question, FalkorDB stays near 30 ms. Postgres climbs to around 100.
+
+38
+00:02:27,500 --> 00:02:30,470
+On clusters, pgRouting wins. We say so.
+
+39
+00:02:30,520 --> 00:02:34,089
+And we wrote minimal repros for three engine bugs we found.
+
+40
+00:02:35,300 --> 00:02:38,377
+That's Track two: agent memory and coordination.
+
+41
+00:02:38,327 --> 00:02:44,767
+Episodic, procedural and shared memory. Handoffs through the graph. A human gate. One graph per company.
+
+42
+00:02:44,817 --> 00:02:49,788
+And Track one: multi-hop reasoning, with graph algorithms as the agents' tools.
+
+43
+00:02:51,500 --> 00:02:52,594
+Promise Graph.
+
+44
+00:02:52,644 --> 00:02:56,360
+Know which promises broke, why, and the cheapest way to keep them.
+

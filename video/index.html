@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Promise Graph: demo video</title>
+<meta name="viewport" content="width=1920">
+<!--
+  The Promise Graph demo video as one page that can paint any moment t exactly (window.__seek).
+  Timing comes from build/timeline.json (voice.py); the page lists its sound cues (window.__cues)
+  for audio.py; render.mjs captures it frame by frame. Real app footage is in clips/ (capture.mjs),
+  all-intra, so every frame seeks exactly. Every figure on screen is from the live app (Oct 18).
+-->
+<style>
+@font-face { font-family: Inter; src: url(assets/inter.woff2) format('woff2'); font-weight: 100 900; }
+:root {
+  --bg: #1E2340; --bg-deep: #12152A; --surface: rgba(46,54,90,.74); --surface-solid: #2E365A; --raised: rgba(58,67,108,.9);
+  --border: rgba(162,134,156,.24); --border-strong: rgba(146,161,194,.4);
+  --text: #F1EEF6; --text-2: #92A1C2; --mauve: #A2869C; --purple: #6B597F; --peri: #92A1C2; --steel: #3F5B8D;
+  --danger: #BD6C73; --danger-text: #E8A3A9; --delayed: #D9A86C; --ok: #7FB59A; --falkor: #8EA6FF; --pg: #D9A86C;
+  --mono: 'Cascadia Mono', 'Cascadia Code', Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg-deep); }
+body { font-family: Inter, 'Segoe UI', sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; font-feature-settings: 'cv11','ss01'; }
+#stage { position: absolute; inset: 0; overflow: hidden;
+  background: radial-gradient(ellipse 80% 70% at 50% 35%, #262C52 0%, #1E2340 45%, #12152A 100%); }
+#grid { position: absolute; inset: 0; opacity: .5;
+  background-image: radial-gradient(rgba(146,161,194,.16) 1.2px, transparent 1.3px); background-size: 36px 36px; }
+#net { position: absolute; inset: 0; }
+.scene { position: absolute; inset: 0; opacity: 0; will-change: opacity, transform; }
+.abs { position: absolute; }
+.center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.kick { font-size: 22px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); }
+.h-xl { font-size: 104px; font-weight: 750; letter-spacing: -.035em; line-height: 1.02; }
+.h-l { font-size: 72px; font-weight: 720; letter-spacing: -.03em; line-height: 1.06; }
+.h-m { font-size: 48px; font-weight: 680; letter-spacing: -.02em; line-height: 1.12; }
+.muted { color: var(--text-2); }
+.danger { color: var(--danger-text); } .ok { color: var(--ok); } .amber { color: var(--delayed); } .blue { color: var(--falkor); }
+.word { display: inline-block; white-space: pre; will-change: transform, opacity; }
+.card { position: absolute; background: var(--surface); border: 1px solid var(--border); border-radius: 22px;
+  box-shadow: 0 30px 80px rgba(5,6,18,.45), inset 0 1px 0 rgba(255,255,255,.05); backdrop-filter: blur(14px); }
+.pill { display: inline-flex; align-items: center; gap: 10px; padding: 8px 18px; border-radius: 999px; font-size: 22px; font-weight: 650;
+  background: rgba(46,54,90,.8); border: 1px solid var(--border-strong); }
+.pill.red { background: rgba(189,108,115,.18); border-color: rgba(189,108,115,.6); color: var(--danger-text); }
+.pill.green { background: rgba(127,181,154,.16); border-color: rgba(127,181,154,.55); color: var(--ok); }
+.pill.amber { background: rgba(217,168,108,.15); border-color: rgba(217,168,108,.55); color: var(--delayed); }
+.pill.blue { background: rgba(142,166,255,.13); border-color: rgba(142,166,255,.5); color: #C9D4FF; }
+.dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.tag { font-family: var(--mono); font-size: 19px; padding: 4px 12px; border-radius: 8px; background: rgba(142,166,255,.12);
+  border: 1px solid rgba(142,166,255,.38); color: #C9D4FF; white-space: nowrap; }
+/* the browser frame around real footage */
+.frame { position: absolute; border-radius: 18px; overflow: hidden; background: #171B33; border: 1px solid rgba(146,161,194,.3);
+  box-shadow: 0 50px 120px rgba(3,4,14,.65), 0 0 0 1px rgba(255,255,255,.03); transform-origin: 50% 50%; }
+.frame .bar { height: 44px; display: flex; align-items: center; gap: 9px; padding: 0 18px; background: #232845; border-bottom: 1px solid rgba(146,161,194,.18); }
+.frame .bar i { width: 13px; height: 13px; border-radius: 50%; background: #4A5078; }
+.frame .bar i:nth-child(1) { background: #BD6C73; } .frame .bar i:nth-child(2) { background: #D9A86C; } .frame .bar i:nth-child(3) { background: #7FB59A; }
+.frame .bar span { margin-left: 18px; font-size: 17px; color: var(--text-2); background: rgba(23,27,51,.7); padding: 5px 16px; border-radius: 8px; }
+.frame .view { position: absolute; left: 0; right: 0; top: 44px; bottom: 0; overflow: hidden; }
+.frame video { position: absolute; left: 0; top: 0; width: 100%; height: auto; transform-origin: 0 0; }
+.callout { position: absolute; padding: 14px 24px; border-radius: 16px; background: rgba(23,27,51,.92); border: 1px solid var(--border-strong);
+  font-size: 30px; font-weight: 650; box-shadow: 0 20px 50px rgba(0,0,0,.4); white-space: nowrap; }
+.callout small { display: block; font-size: 19px; font-weight: 500; color: var(--text-2); margin-top: 2px; }
+.stamp { position: absolute; padding: 18px 34px; border: 5px solid; border-radius: 16px; font-size: 54px; font-weight: 850; letter-spacing: .04em;
+  text-transform: uppercase; background: rgba(18,21,42,.88); }
+.stamp small { display: block; font-size: 24px; font-weight: 600; letter-spacing: 0; text-transform: none; margin-top: 4px; }
+/* captions */
+#cap { position: absolute; left: 50%; bottom: 46px; transform: translateX(-50%); max-width: 1500px; text-align: center; z-index: 50;
+  font-size: 34px; font-weight: 560; line-height: 1.3; padding: 12px 30px; border-radius: 16px; background: rgba(12,14,30,.72);
+  border: 1px solid rgba(146,161,194,.16); backdrop-filter: blur(8px); opacity: 0; }
+#wm { position: absolute; right: 44px; top: 34px; z-index: 40; display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 650; opacity: 0; }
+.brand-mark { border-radius: 30%; background: conic-gradient(from 210deg, #8EA6FF, #A2869C, #BD6C73, #D9A86C, #8EA6FF); }
+#wm .brand-mark { width: 30px; height: 30px; }
+/* code */
+.code { font-family: var(--mono); font-size: 22px; line-height: 1.55; white-space: pre; color: #C9D0E6; }
+.code .k { color: #C9A6E6; } .code .l { color: #8EA6FF; } .code .s { color: var(--delayed); } .code .c { color: #6E7899; }
+.code .hl { background: rgba(142,166,255,.18); border-radius: 6px; box-shadow: 0 0 0 2px rgba(142,166,255,.45); }
+/* chain cards (problem scene) */
+.ship { position: absolute; width: 330px; padding: 20px 22px; border-radius: 18px; background: var(--surface-solid); border: 1px solid var(--border);
+  box-shadow: 0 20px 50px rgba(0,0,0,.35); }
+.ship .t { font-size: 24px; font-weight: 680; line-height: 1.2; }
+.ship .s { font-size: 18px; color: var(--text-2); margin-top: 6px; }
+.ship .d { margin-top: 12px; font-size: 22px; font-weight: 700; }
+.agent { position: absolute; left: 0; width: 640px; height: 112px; padding: 18px 24px; border-radius: 18px; background: var(--surface);
+  border: 1px solid var(--border); display: grid; grid-template-columns: 56px 1fr; gap: 6px 18px; align-items: center; }
+.agent .n { grid-row: span 2; width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; font-size: 26px; font-weight: 800; background: rgba(142,166,255,.14); color: #C9D4FF; }
+.agent .a { font-size: 28px; font-weight: 720; display: flex; gap: 14px; align-items: center; }
+.agent .r { font-size: 21px; color: var(--text-2); }
+.check { display: flex; gap: 16px; align-items: flex-start; font-size: 27px; font-weight: 560; margin: 14px 0; }
+.check b { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(127,181,154,.2); color: var(--ok); font-size: 20px; }
+svg text { font-family: Inter, sans-serif; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="grid"></div>
+  <svg id="net" width="1920" height="1080"></svg>
+  <div id="scenes"></div>
+  <div id="wm"><span class="brand-mark"></span>Promise Graph</div>
+  <div id="cap"></div>
+</div>
+<script>
+// ------------------------------------------------------------------ helpers
+const W = 1920, H = 1080;
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const P = (t, a, b) => clamp((t - a) / (b - a));
+const lerp = (a, b, x) => a + (b - a) * x;
+const E = {
+  out: (x) => 1 - Math.pow(1 - x, 3),
+  out5: (x) => 1 - Math.pow(1 - x, 5),
+  inout: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
+  back: (x) => { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); },
+};
+const $ = (html) => { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstElementChild; };
+const NS = 'http://www.w3.org/2000/svg';
+const S = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const fmt = (n) => Math.round(n).toLocaleString('en-US');
+const usd = (n) => '$' + fmt(n);
+const set = (el, o, tf, extra) => { el.style.opacity = o; if (tf !== undefined) el.style.transform = tf; if (extra) Object.assign(el.style, extra); };
+// rise in: opacity + translateY + slight blur, between a and a+d
+const rise = (el, t, a, d = 0.6, dy = 30, base = '') => { const x = E.out(P(t, a, a + d)); set(el, x, `${base} translateY(${(1 - x) * dy}px)`); return x; };
+// kinetic words
+function words(el, text) { el.innerHTML = text.split(' ').map((w) => `<span class="word">${w} </span>`).join(''); return [...el.querySelectorAll('.word')]; }
+function wordsIn(ws, t, a, stagger = 0.07, d = 0.55) {
+  ws.forEach((w, i) => { const x = E.out(P(t, a + i * stagger, a + i * stagger + d)); w.style.opacity = x; w.style.transform = `translateY(${(1 - x) * 40}px)`; w.style.filter = `blur(${(1 - x) * 8}px)`; });
+}
+// a rendered number that counts up
+const count = (t, a, d, to) => to * E.out5(P(t, a, a + d));
+
+// ------------------------------------------------------------------ the world (approximate equirectangular, cropped)
+const PORTS = {
+  CNSHA: ['Shanghai', 31.23, 121.47], KRPUS: ['Busan', 35.1, 129.04], CNYTN: ['Shenzhen', 22.57, 114.27], VNSGN: ['Ho Chi Minh City', 10.76, 106.79],
+  SGSIN: ['Singapore', 1.26, 103.84], MYPKG: ['Port Klang', 3.0, 101.39], LKCMB: ['Colombo', 6.95, 79.85], BDCGP: ['Chittagong', 22.31, 91.8],
+  INNSA: ['Nhava Sheva', 18.95, 72.95], AEJEA: ['Jebel Ali', 25.01, 55.06], EGPSD: ['Port Said', 31.26, 32.3], ESALG: ['Algeciras', 36.13, -5.44],
+  NLRTM: ['Rotterdam', 51.95, 4.14], DEHAM: ['Hamburg', 53.54, 9.97], GBFXT: ['Felixstowe', 51.96, 1.35], USLAX: ['Los Angeles', 33.74, -118.27],
+  USNYC: ['New York', 40.68, -74.15], USSAV: ['Savannah', 32.08, -81.09], TWKHH: ['Kaohsiung', 22.61, 120.28],
+};
+const LANES = [['CNSHA','SGSIN'],['KRPUS','CNSHA'],['CNYTN','SGSIN'],['TWKHH','CNYTN'],['VNSGN','SGSIN'],['SGSIN','MYPKG'],['SGSIN','LKCMB'],['BDCGP','LKCMB'],
+  ['LKCMB','INNSA'],['INNSA','AEJEA'],['LKCMB','AEJEA'],['AEJEA','EGPSD'],['LKCMB','EGPSD'],['EGPSD','ESALG'],['ESALG','NLRTM'],['NLRTM','DEHAM'],['NLRTM','GBFXT'],
+  ['CNSHA','USLAX'],['KRPUS','USLAX'],['ESALG','USNYC'],['NLRTM','USNYC'],['USNYC','USSAV'],['CNYTN','USLAX']];
+function proj(lat, lon, box) {   // box = {x, y, w, h, lon0, lon1, lat0, lat1}
+  return [box.x + (lon - box.lon0) / (box.lon1 - box.lon0) * box.w, box.y + (box.lat1 - lat) / (box.lat1 - box.lat0) * box.h];
+}
+function arcPath(a, b, bend = 0.18) {
+  const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1];
+  return `M${a[0]},${a[1]} Q${mx - dy * bend},${my + dx * bend - Math.hypot(dx, dy) * bend * 0.6} ${b[0]},${b[1]}`;
+}
+
+// ------------------------------------------------------------------ the background network (deterministic drift)
+const net = document.getElementById('net');
+const rnd = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+const NODES = Array.from({ length: 46 }, () => ({ x: rnd() * W, y: rnd() * H, r: 1.6 + rnd() * 2.4, p: rnd() * 6.28, s: 0.15 + rnd() * 0.35 }));
+const EDGES = [];
+NODES.forEach((a, i) => NODES.forEach((b, j) => { if (j > i && Math.hypot(a.x - b.x, a.y - b.y) < 230) EDGES.push([i, j]); }));
+const netLines = EDGES.map(() => S('line', { stroke: 'rgba(146,161,194,0.10)', 'stroke-width': 1 }, net));
+const netDots = NODES.map(() => S('circle', { fill: 'rgba(162,134,156,0.45)' }, net));
+function drawNet(t, strength) {
+  const pos = NODES.map((n) => [n.x + Math.sin(t * n.s + n.p) * 18, n.y + Math.cos(t * n.s * 0.8 + n.p) * 14]);
+  EDGES.forEach(([i, j], k) => { const l = netLines[k]; l.setAttribute('x1', pos[i][0]); l.setAttribute('y1', pos[i][1]); l.setAttribute('x2', pos[j][0]); l.setAttribute('y2', pos[j][1]); l.setAttribute('opacity', strength); });
+  NODES.forEach((n, i) => { const c = netDots[i]; c.setAttribute('cx', pos[i][0]); c.setAttribute('cy', pos[i][1]); c.setAttribute('r', n.r); c.setAttribute('opacity', strength); });
+}
+
+// ------------------------------------------------------------------ footage
+const videos = [];
+function footage(clip, { x, y, w, url = 'localhost:8000 · Promise Graph' }) {
+  const h = Math.round(w * 9 / 16) + 44;
+  const el = $(`<div class="frame" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px">
+    <div class="bar"><i></i><i></i><i></i><span>${url}</span></div><div class="view"><video muted playsinline preload="auto" src="clips/${clip}.mp4"></video></div></div>`);
+  const v = el.querySelector('video');
+  const rec = { el, v, want: null, w, h: h - 44 };
+  videos.push(rec);
+  // show clip time ct with a zoom: scale s around the clip point (fx, fy) in 0..1 of the clip
+  rec.show = (ct, s = 1, fx = 0.5, fy = 0.5) => {
+    rec.want = Math.max(0, ct);
+    const vw = rec.w * s, vh = vw * 9 / 16;
+    const tx = clamp(rec.w / 2 - fx * vw, rec.w - vw, 0), ty = clamp(rec.h / 2 - fy * vh, rec.h - vh, 0);
+    v.style.width = vw + 'px'; v.style.transform = `translate(${tx}px, ${ty}px)`;
+  };
+  return rec;
+}
+
+// ------------------------------------------------------------------ scenes
+const root = document.getElementById('scenes');
+const scenes = {};
+function scene(id, build) { const el = $(`<div class="scene" data-id="${id}"></div>`); root.appendChild(el); scenes[id] = { id, el, ...build(el) }; }
+let TL, V, SC;     // timeline, lines by id, scenes by id (from timeline.json)
+const at = (id) => V[id].at, end = (id) => V[id].at + V[id].dur;
+const cues = [];
+const cue = (t, kind, extra = {}) => cues.push({ t: +t.toFixed(3), kind, ...extra });
+
+// 1. HOOK -------------------------------------------------------------------------------
+scene('hook', (el) => {
+  const t1 = $(`<div class="center h-xl" style="top:300px;width:1700px;text-align:center"></div>`); el.appendChild(t1);
+  const w1 = words(t1, 'Every order is a promise.');
+  const card = $(`<div class="card" style="left:660px;top:470px;width:600px;padding:30px 36px">
+    <div style="display:flex;justify-content:space-between;align-items:center"><span class="kick" style="font-size:18px">Order ORD-000730</span><span class="pill green" style="font-size:19px"><i class="dot" style="background:var(--ok)"></i>On track</span></div>
+    <div style="font-size:40px;font-weight:720;margin-top:14px">Aisha Rahman</div>
+    <div style="display:flex;gap:16px;align-items:center;margin-top:18px;font-size:28px"><span class="muted">Promised</span><b>Dec 14</b></div></div>`);
+  el.appendChild(card);
+  const pill = card.querySelector('.pill');
+  // the map
+  const box = { x: 160, y: 120, w: 1600, h: 760, lon0: -125, lon1: 135, lat0: -10, lat1: 60 };
+  const map = S('svg', { width: W, height: H, style: 'position:absolute;left:0;top:0' }); el.appendChild(map);
+  const lanes = LANES.map(([a, b]) => S('path', { d: arcPath(proj(PORTS[a][1], PORTS[a][2], box), proj(PORTS[b][1], PORTS[b][2], box)), fill: 'none', stroke: 'rgba(146,161,194,.35)', 'stroke-width': 2 }, map));
+  const ships = LANES.map((l, i) => S('circle', { r: 5, fill: '#D9A86C' }, map));
+  const portDots = Object.entries(PORTS).map(([id, [n, la, lo]]) => { const [x, y] = proj(la, lo, box); const g = S('g', {}, map);
+    S('circle', { cx: x, cy: y, r: id === 'SGSIN' ? 11 : 6, fill: id === 'SGSIN' ? '#BD6C73' : '#92A1C2' }, g);
+    if (['SGSIN','NLRTM','USLAX','CNSHA','EGPSD','USNYC','LKCMB'].includes(id)) S('text', { x: id === 'SGSIN' ? x - 22 : x + 14, y: id === 'SGSIN' ? y + 40 : y + 6, 'text-anchor': id === 'SGSIN' ? 'end' : 'start', fill: id === 'SGSIN' ? '#E8A3A9' : '#92A1C2', 'font-size': id === 'SGSIN' ? 28 : 18, 'font-weight': id === 'SGSIN' ? 750 : 500 }, g).textContent = id === 'SGSIN' ? 'Port of Singapore · CLOSED' : n;
+    return { g, x, y, id }; });
+  const sg = proj(1.26, 103.84, box);
+  const rings = [0, 1, 2].map(() => S('circle', { cx: sg[0], cy: sg[1], r: 10, fill: 'none', stroke: '#BD6C73', 'stroke-width': 3 }, map));
+  // the broken promises (mini cards around)
+  const minis = Array.from({ length: 14 }, (_, i) => { const a = (i / 14) * Math.PI * 2 + 0.3, rr = 330 + (i % 3) * 70;
+    const m = $(`<div class="card" style="left:${960 + Math.cos(a) * rr * 1.72 - 95}px;top:${560 + Math.sin(a) * rr * 0.86 - 34}px;width:190px;padding:12px 16px;border-radius:14px">
+      <div style="font-size:15px;color:var(--text-2)">Promised Dec ${8 + (i * 5) % 17}</div><div class="st" style="font-size:20px;font-weight:750;color:var(--ok)">On time</div></div>`);
+    el.appendChild(m); return { m, st: m.querySelector('.st'), d: Math.hypot(Math.cos(a) * rr * 1.72, Math.sin(a) * rr * 0.86) }; });
+  const t4 = $(`<div class="center h-l" style="top:540px;width:1500px;text-align:center"></div>`); el.appendChild(t4);
+  const w4 = words(t4, 'Which promises just broke?');
+  return {
+    cues(s) { cue(s.start + 0.6, 'whoosh'); cue(at('h2') + 0.1, 'pop', { i: 2, bright: 1 }); cue(at('h3') + 0.3, 'whoosh', { big: 1 }); cue(at('h3') + 1.6, 'pulse');
+      cue(at('h4') - 0.05, 'slam', { big: 1 }); minis.forEach((m, i) => cue(at('h4') + 0.25 + m.d / 1400, 'tick', { i })); },
+    render(t) {
+      const a1 = at('h1'), a2 = at('h2'), a3 = at('h3'), a4 = at('h4');
+      wordsIn(w1, t, a1);
+      const out1 = E.inout(P(t, a3 - 0.2, a3 + 0.5));
+      set(t1, 1 - out1, `translate(-50%, -50%) translateY(${-out1 * 60}px)`);
+      const c = E.back(P(t, a2, a2 + 0.6));
+      set(card, P(t, a2, a2 + 0.3) * (1 - out1), `scale(${0.8 + 0.2 * c}) translateY(${out1 * -40}px)`);
+      const mapIn = E.out(P(t, a3, a3 + 1.0)), mapOut = P(t, a4 - 0.1, a4 + 0.5);
+      map.style.opacity = mapIn * (1 - 0.7 * mapOut);
+      map.style.transform = `scale(${1.08 - 0.08 * mapIn + 0.06 * mapOut})`;
+      lanes.forEach((l, i) => { const len = 1400; l.style.strokeDasharray = len; l.style.strokeDashoffset = len * (1 - E.out(P(t, a3 + i * 0.03, a3 + 1.2 + i * 0.03))); });
+      // ships flow along lanes until the port closes (a3 + 1.4), then the ones near Singapore freeze red
+      const freeze = a3 + 1.4;
+      ships.forEach((c2, i) => { const l = lanes[i]; const len = l.getTotalLength(); const tt = Math.min(t, freeze + (LANES[i].includes('SGSIN') ? 0 : 99));
+        const u = ((tt * 0.09 + i * 0.137) % 1); const p = l.getPointAtLength(u * len); c2.setAttribute('cx', p.x); c2.setAttribute('cy', p.y);
+        const stuck = LANES[i].includes('SGSIN') && t > freeze; c2.setAttribute('fill', stuck ? '#BD6C73' : '#D9A86C'); c2.setAttribute('r', stuck ? 7 : 5); c2.style.opacity = mapIn; });
+      rings.forEach((r, i) => { const ph = ((t - freeze) * 0.7 + i / 3) % 1; const on = t > freeze ? 1 : 0; r.setAttribute('r', 10 + ph * 80); r.style.opacity = on * (1 - ph) * 0.9; });
+      // h4: the promises break in a wave out from the centre
+      minis.forEach(({ m, st, d }) => { const ap = a4 - 0.2 + d / 2600; const x = E.back(P(t, ap, ap + 0.5)); set(m, P(t, ap, ap + 0.3), `scale(${0.6 + 0.4 * x})`);
+        const br = t > a4 + 0.25 + d / 1400; st.textContent = br ? 'LATE' : 'On time'; st.style.color = br ? 'var(--danger-text)' : 'var(--ok)'; m.style.borderColor = br ? 'rgba(189,108,115,.7)' : ''; });
+      wordsIn(w4, t, a4 + 0.05, 0.08);
+    },
+  };
+});
+
+// 2. LOGO --------------------------------------------------------------------------------
+scene('logo', (el) => {
+  const mark = $(`<div class="brand-mark abs" style="left:${960 - 70}px;top:330px;width:140px;height:140px;box-shadow:0 0 120px rgba(142,166,255,.35)"></div>`); el.appendChild(mark);
+  const name = $(`<div class="center" style="top:560px;font-size:130px;font-weight:800;letter-spacing:-.045em;white-space:nowrap"></div>`); el.appendChild(name);
+  const nw = words(name, 'Promise Graph');
+  const tag = $(`<div class="center h-m muted" style="top:680px;white-space:nowrap;font-weight:560">Agents with a memory, built on <span class="blue" style="font-weight:750">FalkorDB</span></div>`); el.appendChild(tag);
+  const pills = $(`<div class="center" style="top:790px;display:flex;gap:16px;white-space:nowrap"><span class="pill">Graph Hacks · WeMakeDevs × FalkorDB</span><span class="pill blue">Track 2 · Agent Memory &amp; Coordination</span><span class="pill">Team Araxys</span></div>`); el.appendChild(pills);
+  return {
+    cues(s) { cue(at('l1') - 0.1, 'impact', { big: 1, warm: 1 }); cue(at('l1') + 0.2, 'shimmer'); cue(at('l2') + 0.4, 'whoosh'); },
+    render(t, s) {
+      const a = at('l1') - 0.15; const x = E.back(P(t, a, a + 0.8));
+      set(mark, P(t, a, a + 0.3), `rotate(${(1 - x) * -90}deg) scale(${0.3 + 0.7 * x})`);
+      wordsIn(nw, t, a + 0.25, 0.1, 0.6);
+      rise(tag, t, at('l2'), 0.7, 30, 'translate(-50%, -50%)');
+      rise(pills, t, at('l2') + 0.9, 0.7, 30, 'translate(-50%, -50%)');
+    },
+  };
+});
+
+// 3. PROBLEM: the chain ------------------------------------------------------------------
+const CHAIN = [
+  { t: 'Port of Singapore', s: 'Closed Oct 20 – 24 · then 3 days of backlog', d: 'CLOSED', c: 'danger' },
+  { t: 'Radio modules', s: 'to Johor PCB Fabrication', d: '+8 days late here', c: 'danger' },
+  { t: 'PCB assemblies', s: 'to Dongguan Device Assembly', d: '+6 days · 2 days of buffer absorbed', c: 'danger' },
+  { t: 'Smart home devices', s: 'for Northwind DC Daventry', d: '+5 days · 1 day absorbed', c: 'danger' },
+  { t: 'Replenishment', s: 'to Northwind DC Manchester', d: '+4 days · 1 day absorbed', c: 'amber' },
+  { t: 'Parcel to Liverpool', s: 'last mile, by courier', d: '+4 days late here', c: 'amber' },
+  { t: "Aisha Rahman's order", s: 'Promised Dec 14', d: '3 days late · $63 fee', c: 'danger' },
+];
+const CHAIN_POS = [[90, 330], [500, 330], [910, 330], [1320, 330], [1320, 640], [910, 640], [500, 640]];
+scene('problem', (el) => {
+  const title = $(`<div class="abs" style="left:96px;top:120px"><div class="kick">The disruption</div><div class="h-l" style="margin-top:10px">Singapore's terminals go dark</div></div>`); el.appendChild(title);
+  const svg = S('svg', { width: W, height: H, style: 'position:absolute;left:0;top:0' }); el.appendChild(svg);
+  const CY = 72;   // a card's vertical middle
+  const links = CHAIN.slice(1).map((_, i) => { const a = CHAIN_POS[i], b = CHAIN_POS[i + 1];
+    const d = b[1] === a[1]
+      ? (b[0] > a[0] ? `M${a[0] + 330},${a[1] + CY} L${b[0]},${b[1] + CY}` : `M${a[0]},${a[1] + CY} L${b[0] + 330},${b[1] + CY}`)
+      : `M${a[0] + 165},${a[1] + 2 * CY} C${a[0] + 165},${a[1] + 2 * CY + 80} ${b[0] + 165},${b[1] - 80} ${b[0] + 165},${b[1]}`;
+    const p = S('path', { d, fill: 'none', stroke: 'rgba(146,161,194,.5)', 'stroke-width': 4, 'stroke-linecap': 'round' }, svg);
+    const pulse = S('circle', { r: 11, fill: '#BD6C73' }, svg);
+    return { p, pulse }; });
+  const cards = CHAIN.map((c, i) => { const [x, y] = CHAIN_POS[i];
+    const e = $(`<div class="ship" style="left:${x}px;top:${y}px"><div class="t">${c.t}</div><div class="s">${c.s}</div><div class="d ${c.c === 'danger' ? 'danger' : 'amber'}">${c.d}</div></div>`);
+    el.appendChild(e); return e; });
+  const fin = $(`<div class="center h-l" style="top:920px;white-space:nowrap">That's a graph. <span class="muted">So we built it as one.</span></div>`); el.appendChild(fin);
+  return {
+    cues(s) { cue(s.start, 'whoosh'); CHAIN.forEach((_, i) => cue(at('p2') + i * 0.95, i ? 'blip' : 'pulse', { i })); cue(at('p3'), 'impact'); },
+    render(t) {
+      rise(title, t, at('p1') - 0.2, 0.7);
+      const a2 = at('p2') - 0.6;
+      cards.forEach((c, i) => { const ap = i === 0 ? at('p1') + 0.3 : a2 + i * 0.95; const x = E.back(P(t, ap, ap + 0.5));
+        const g = P(t, at('p3') - 0.2, at('p3') + 0.6);
+        set(c, P(t, ap, ap + 0.25), `scale(${(0.7 + 0.3 * x) * (1 - 0.06 * g)})`, { borderColor: i && t > ap + 0.3 ? (CHAIN[i].c === 'danger' ? 'rgba(189,108,115,.7)' : 'rgba(217,168,108,.65)') : '', borderRadius: `${18 + g * 60}px` }); });
+      links.forEach(({ p, pulse }, i) => { const ap = a2 + (i + 1) * 0.95 - 0.55; const len = p.getTotalLength(); const x = E.inout(P(t, ap, ap + 0.55));
+        p.style.strokeDasharray = len; p.style.strokeDashoffset = len * (1 - x); p.setAttribute('stroke', x >= 1 ? 'rgba(189,108,115,.75)' : 'rgba(146,161,194,.5)');
+        const pt = p.getPointAtLength(len * x); pulse.setAttribute('cx', pt.x); pulse.setAttribute('cy', pt.y); pulse.style.opacity = x > 0 && x < 1 ? 1 : 0; });
+      rise(fin, t, at('p3'), 0.6, 30, 'translate(-50%, -50%)');
+    },
+  };
+});
+
+// 4. MODEL: the graph and the query ------------------------------------------------------
+scene('model', (el) => {
+  const head = $(`<div class="abs" style="left:96px;top:96px"><div class="kick">The graph model, in FalkorDB</div></div>`); el.appendChild(head);
+  const svg = S('svg', { width: 1000, height: 820, style: 'position:absolute;left:60px;top:170px' }); el.appendChild(svg);
+  const N = { ev: [140, 90, 'Event', 'Singapore shut', '#BD6C73'], hub: [140, 300, 'Hub', 'Port of Singapore', '#BD6C73'], leg: [140, 510, 'Leg', 'by sea, Oct 21', '#92A1C2'],
+    s0: [470, 510, 'Shipment', 'radio modules', '#D9A86C'], s1: [800, 510, 'Shipment', 'PCB assemblies', '#D9A86C'], ord: [800, 300, 'Order', 'ORD-000730', '#8EA6FF'],
+    cus: [800, 90, 'Customer', 'Aisha Rahman', '#A2869C'], pr: [470, 300, 'Promise', 'due Dec 14', '#7FB59A'] };
+  const R = [['ev', 'hub', 'AFFECTS'], ['leg', 'hub', 'TO'], ['s0', 'leg', 'USES'], ['s0', 's1', 'FEEDS {buffer_days}'], ['ord', 's1', 'FULFILLED_BY'], ['cus', 'ord', 'PLACED'], ['ord', 'pr', 'HAS_PROMISE']];
+  const edges = R.map(([a, b, lab], i) => { const A = N[a], B = N[b]; const g = S('g', {}, svg);
+    const p = S('path', { d: `M${A[0]},${A[1]} L${B[0]},${B[1]}`, stroke: lab.startsWith('FEEDS') ? '#8EA6FF' : 'rgba(146,161,194,.6)', 'stroke-width': lab.startsWith('FEEDS') ? 5 : 3, fill: 'none' }, g);
+    const tx = S('text', { x: (A[0] + B[0]) / 2 + (A[0] === B[0] ? 14 : 0), y: (A[1] + B[1]) / 2 - 12, fill: lab.startsWith('FEEDS') ? '#C9D4FF' : '#92A1C2', 'font-size': 19, 'font-weight': 650, 'text-anchor': A[0] === B[0] ? 'start' : 'middle', 'font-family': 'Cascadia Mono, Consolas, monospace' }, g); tx.textContent = lab;
+    return { g, p, feeds: lab.startsWith('FEEDS') }; });
+  const nodes = Object.entries(N).map(([k, [x, y, lab, sub, col]]) => { const g = S('g', {}, svg);
+    S('circle', { cx: x, cy: y, r: 62, fill: 'rgba(46,54,90,.95)', stroke: col, 'stroke-width': 4 }, g);
+    const a = S('text', { x, y: y - 4, fill: '#F1EEF6', 'font-size': 23, 'font-weight': 750, 'text-anchor': 'middle' }, g); a.textContent = lab;
+    const b = S('text', { x, y: y + 24, fill: '#92A1C2', 'font-size': 15, 'text-anchor': 'middle' }, g); b.textContent = sub;
+    return { g, x, y }; });
+  const code = $(`<div class="card" style="left:1000px;top:170px;width:870px;padding:28px 32px"><div class="kick" style="font-size:17px;margin-bottom:14px">Q1 · the cascade · <span style="text-transform:none;letter-spacing:0">simplified from falkor_store.py</span></div><div class="code"></div></div>`);
+  el.appendChild(code);
+  const LINES = [
+    `<span class="k">MATCH</span> (e:<span class="l">Event</span> {id: $event})-[:<span class="l">AFFECTS</span>]->(h:<span class="l">Hub</span>)`,
+    `<span class="k">MATCH</span> (h)<-[:<span class="l">TO</span>]-(l:<span class="l">Leg</span>)<-[:<span class="l">USES</span>]-(s0:<span class="l">Shipment</span>)`,
+    `<span class="k">WITH</span> s0, e.end_day + e.backlog_days - l.arrive_day + 1 <span class="k">AS</span> d0`,
+    `<span class="k">MATCH</span> p = (s0)<span class="hl">-[:<span class="l">FEEDS</span>*0..8]-></span>(s:<span class="l">Shipment</span>)`,
+    `<span class="k">WITH</span> s, <span class="hl">reduce</span>(d = d0, f <span class="k">IN</span> relationships(p) |`,
+    `  <span class="k">CASE WHEN</span> d > f.buffer_days`,
+    `       <span class="k">THEN</span> d - f.buffer_days <span class="k">ELSE</span> 0 <span class="k">END</span>) <span class="k">AS</span> delay`,
+    `<span class="k">MATCH</span> (s)<-[:<span class="l">FULFILLED_BY</span>]-(o)-[:<span class="l">HAS_PROMISE</span>]->(pr)`,
+    `<span class="k">WHERE</span> s.eta_day + delay > pr.due_day`,
+    `<span class="k">RETURN</span> pr.id, delay`,
+  ];
+  const codeEl = code.querySelector('.code');
+  const lineEls = LINES.map((h) => { const d = document.createElement('div'); d.innerHTML = h; codeEl.appendChild(d); return d; });
+  const note = $(`<div class="abs muted" style="left:1004px;top:760px;width:860px;font-size:24px;line-height:1.4">One query follows the delay hop by hop, lets each link's buffer soak some up, and keeps every promise that now misses its date.</div>`); el.appendChild(note);
+  return {
+    cues(s) { cue(s.start, 'whoosh'); nodes.forEach((_, i) => cue(at('m1') + 0.2 + i * 0.32, 'pop', { i })); cue(at('m2') - 0.2, 'type', { dur: 3.6, n: 40 }); },
+    render(t) {
+      rise(head, t, at('m1') - 0.3, 0.6);
+      nodes.forEach(({ g, x, y }, i) => { const ap = at('m1') + 0.2 + i * 0.32; const k = E.back(P(t, ap, ap + 0.5)); g.style.opacity = P(t, ap, ap + 0.2); g.setAttribute('transform', `translate(${x} ${y}) scale(${0.4 + 0.6 * k}) translate(${-x} ${-y})`); });
+      edges.forEach(({ g, p, feeds }, i) => { const ap = at('m1') + 0.9 + i * 0.32; const k = E.out(P(t, ap, ap + 0.5)); g.style.opacity = k;
+        const len = p.getTotalLength(); p.style.strokeDasharray = len; p.style.strokeDashoffset = len * (1 - k);
+        if (feeds) { const glow = t > at('m2') ? 0.5 + 0.5 * Math.sin((t - at('m2')) * 5) : 0; p.setAttribute('stroke-width', 5 + glow * 4); } });
+      const ci = E.out(P(t, at('m2') - 0.5, at('m2') + 0.2)); set(code, ci, `translateX(${(1 - ci) * 80}px)`);
+      lineEls.forEach((d, i) => { const ap = at('m2') - 0.2 + i * 0.4; d.style.opacity = P(t, ap, ap + 0.25); d.style.transform = `translateX(${(1 - E.out(P(t, ap, ap + 0.35))) * 20}px)`; });
+      rise(note, t, at('m2') + 3.8, 0.7);
+    },
+  };
+});
+
+// 5. ANSWER: footage ---------------------------------------------------------------------
+scene('answer', (el) => {
+  const f = footage('ask', { x: 160, y: 96, w: 1600 }); el.appendChild(f.el);
+  const big = $(`<div class="callout" style="left:1140px;top:120px;font-size:46px;padding:20px 30px"><span class="danger">755</span> orders late<small><span class="o" style="font-size:30px;font-weight:700;color:#F1EEF6">$114,065</span> in late fees</small></div>`);
+  el.appendChild(big);
+  const n755 = big.querySelector('.danger'), nUsd = big.querySelector('.o');
+  const q = $(`<div class="callout" style="left:1080px;top:820px">The AI only picks a template<small>FalkorDB runs the query and shows it: 1,290 characters, 21 lines</small></div>`); el.appendChild(q);
+  return {
+    cues(s) { cue(s.start, 'whoosh'); cue(at('a1') + 0.2, 'ticks', { dur: 1.3, n: 14 }); cue(at('a3') + 2.4, 'pop', { i: 1, bright: 1 }); },
+    render(t, s) {
+      const lt = t - s.start;
+      const ct = lt * 0.99;
+      // camera: landing stats while typing, out to the diagram, the globe, then the query bar
+      const k1 = E.inout(P(lt, 0.5, 2.0)), k2 = E.inout(P(lt, 4.6, 6.0)), k3 = E.inout(P(lt, 11.4, 12.6));
+      const sc = lerp(lerp(1, 1.55, k1), 1.0, k2) + 0.42 * k3;
+      const fx = lerp(lerp(0.5, 0.26, k1), 0.38, k2) + (0.36 - 0.38) * k3, fy = lerp(lerp(0.5, 0.22, k1), 0.5, k2) + (0.85 - 0.5) * k3;
+      f.show(ct, sc, fx, fy);
+      set(f.el, 1, `scale(${1 - 0.02 * k1})`);
+      const bi = E.back(P(lt, at('a1') - s.start + 0.1, at('a1') - s.start + 0.7)), bo = P(lt, 4.4, 4.9);
+      set(big, P(lt, 0.2, 0.5) * (1 - bo), `scale(${0.8 + 0.2 * bi})`);
+      n755.textContent = fmt(count(lt, 0.3, 1.4, 755)); nUsd.textContent = usd(count(lt, 0.3, 1.4, 114065));
+      const qi = E.out(P(lt, at('a3') - s.start + 2.2, at('a3') - s.start + 2.8)); set(q, qi * (1 - P(lt, 15.3, 15.8)), `translateY(${(1 - qi) * 20}px)`);
+    },
+  };
+});
+
+// 6. WHY: footage (globe chain, then the timeline, then Step by step) ------------------------
+scene('why', (el) => {
+  const f1 = footage('why', { x: 160, y: 96, w: 1600 }); el.appendChild(f1.el);
+  const f2 = footage('split', { x: 160, y: 96, w: 1600 }); el.appendChild(f2.el);
+  const tag = $(`<div class="callout" style="left:150px;top:830px"><span class="ok">Buffer</span> soaked up part of the delay<small>each row: the planned trip, then the days of delay it passed on</small></div>`); el.appendChild(tag);
+  const tag2 = $(`<div class="callout" style="left:1180px;top:140px">Step by step<small>pick a step, and it lights up on the map</small></div>`); el.appendChild(tag2);
+  return {
+    cues(s) { cue(s.start, 'whoosh'); cue(at('w3') - 0.1, 'click'); },
+    render(t, s) {
+      const lt = t - s.start, w3 = at('w3') - s.start;
+      // why clip: 1.0 -> 3.8 (globe chain) over 0..1.75, then 5.6 -> 13.4 (timeline) until w3
+      const ct = lt < 1.75 ? lerp(1.0, 3.8, lt / 1.75) : lerp(7.0, 13.5, P(lt, 1.75, w3));
+      const kz = E.inout(P(lt, 1.6, 2.6));
+      f1.show(ct, lerp(1.25, 1.42, kz), lerp(0.36, 0.38, kz), lerp(0.5, 0.56, kz));
+      const sw = E.inout(P(lt, w3 - 0.35, w3 + 0.15));
+      set(f1.el, 1 - sw); set(f2.el, sw, `scale(${0.97 + 0.03 * sw})`);
+      // split clip: from 1.8 (pane open) on, at 1.4x
+      const ct2 = 1.8 + Math.max(0, lt - w3) * 1.45;
+      f2.show(ct2, 1.38, 0.5, 0.42);
+      const ti = E.out(P(lt, 3.2, 3.8)); set(tag, ti * (1 - P(lt, w3 - 0.6, w3 - 0.2)), `translateY(${(1 - ti) * 20}px)`);
+      const t2 = E.out(P(lt, w3 + 0.6, w3 + 1.2)); set(tag2, t2, `translateY(${(1 - t2) * 20}px)`);
+    },
+  };
+});
+
+// 7. ENGINES: footage ---------------------------------------------------------------------
+scene('engines', (el) => {
+  const f = footage('engines', { x: 160, y: 96, w: 1600 }); el.appendChild(f.el);
+  const same = $(`<div class="callout" style="left:150px;top:820px"><span class="ok">✓</span> Same question, same rows<small>FalkorDB vs PostgreSQL, run back to back</small></div>`); el.appendChild(same);
+  return {
+    cues(s) { cue(s.start, 'whoosh'); cue(at('e2') - 0.2, 'success', { ok: 1 }); },
+    render(t, s) {
+      const lt = t - s.start; const ct = 0.6 + lt * 1.07;
+      const k1 = E.inout(P(lt, 0.2, 1.2)), k2 = E.inout(P(lt, 4.2, 5.0));
+      f.show(ct, lerp(lerp(1, 1.6, k1), 1.12, k2), lerp(lerp(0.5, 0.5, k1), 0.5, k2), lerp(lerp(0.5, 0.15, k1), 0.5, k2));
+      const si = E.out(P(lt, at('e2') - s.start - 0.2, at('e2') - s.start + 0.4)); set(same, si, `translateY(${(1 - si) * 20}px)`);
+    },
+  };
+});
+
+// 8. AGENTS: footage + the six -----------------------------------------------------------
+const AGENTS = [
+  ['Sentinel', 'algo.betweenness', 'Port of Singapore: the #1 chokepoint · 12 shipments inside the window', 'g2'],
+  ['Impact analyst', 'FEEDS*0..8 · algo.WCC', '755 orders · $114,065 · 6 stranded groups · 12 root shipments', 'g3'],
+  ['Rerouter', 'algo.SPpaths', '8 routes around Singapore for 4 of the 12 roots', 'g4'],
+  ['Finance', 'what-if cascade + memory', '3 rescues by sea for $19,180, saving $68,257', 'g5'],
+  ['Verifier', 're-runs every query', '13 of 13 checks passed · every route re-walked', 'g6'],
+];
+scene('agents', (el) => {
+  const f = footage('agents', { x: 160, y: 96, w: 1600 }); el.appendChild(f.el);
+  const list = $(`<div class="abs" style="left:70px;top:150px;width:660px"><div class="kick" style="margin-bottom:22px">Six agents, one graph</div></div>`); el.appendChild(list);
+  const rows = AGENTS.map(([n, tag, r], i) => { const e = $(`<div class="agent" style="top:${60 + i * 128}px"><div class="n">${i + 1}</div><div class="a">${n}<span class="tag">${tag}</span></div><div class="r">${r}</div></div>`); list.appendChild(e); return e; });
+  const chain = $(`<div class="card" style="left:70px;top:820px;width:1780px;padding:22px 30px;display:flex;align-items:center;gap:18px;font-size:24px;font-weight:600"></div>`);
+  chain.innerHTML = ['Sentinel', 'Impact', 'Rerouter', 'Finance', 'Verifier', 'Human', 'Comms'].map((n) => `<span class="pill" style="font-size:21px">${n}</span>`).join('<span class="muted" style="font-size:26px">→</span>') +
+    `<span class="muted" style="margin-left:auto;font-size:21px">each reads the last <b style="color:#F1EEF6">Decision</b> from FalkorDB and writes its own</span>`;
+  el.appendChild(chain);
+  const steps = [...chain.querySelectorAll('.pill')];
+  return {
+    cues(s) { cue(s.start - 1.6, 'riser', { dur: 1.6 }); cue(s.start, 'impact', { big: 1 }); AGENTS.forEach(([, , , id], i) => cue(at(id) - 0.05, 'tile', { i })); cue(at('g7'), 'send'); steps.forEach((_, i) => cue(at('g7') + 0.2 + i * 0.28, 'pop', { i })); },
+    render(t, s) {
+      const lt = t - s.start; const g2 = at('g2') - s.start, g7 = at('g7') - s.start;
+      // the clip: run (0..3), then the Agents view building, a bit faster
+      const ct = lt < 3.4 ? lt * 0.9 : 3.06 + (lt - 3.4) * 1.1;
+      const split = E.inout(P(lt, g2 - 0.6, g2 + 0.1)), back = E.inout(P(lt, g7 - 0.4, g7 + 0.2));
+      const k0 = E.inout(P(lt, 0.3, 1.3));
+      // full frame on the right panel first, then the frame slides right and the list comes in
+      const fw = lerp(1600, 1100, split); f.el.style.width = fw + 'px'; f.el.style.height = (fw * 9 / 16 + 44) + 'px'; f.w = fw; f.h = fw * 9 / 16;
+      f.show(ct, lerp(lerp(1, 1.9, k0), 1.32, split), lerp(lerp(0.5, 0.9, k0), 0.37, split), lerp(lerp(0.5, 0.3, k0), 0.45, split));
+      f.el.style.left = lerp(160, 770, split) + 'px'; f.el.style.top = lerp(96, 200, split) - back * 40 + 'px';
+      set(list, split, `translateX(${(1 - split) * -60}px)`);
+      rows.forEach((r, i) => { const ap = at(AGENTS[i][3]) - s.start - 0.15; const on = P(lt, ap, ap + 0.35); const done = lt > ap + 0.3;
+        r.style.opacity = 0.35 + 0.65 * on; r.style.transform = `translateX(${(1 - E.out(on)) * 20}px)`;
+        r.style.borderColor = done ? 'rgba(142,166,255,.55)' : ''; r.style.background = done ? 'rgba(58,67,108,.92)' : ''; });
+      set(chain, E.out(P(lt, g7 - 0.2, g7 + 0.4)), `translateY(${(1 - E.out(P(lt, g7 - 0.2, g7 + 0.4))) * 30}px)`);
+      steps.forEach((p, i) => { const ap = g7 + 0.2 + i * 0.28; p.style.opacity = 0.3 + 0.7 * P(lt, ap, ap + 0.2); p.style.borderColor = lt > ap ? 'rgba(142,166,255,.6)' : ''; });
+    },
+  };
+});
+
+// 9. GATE: approval footage + stamps -------------------------------------------------------
+scene('gate', (el) => {
+  const f = footage('approve', { x: 160, y: 96, w: 1600 }); el.appendChild(f.el);
+  const blocked = $(`<div class="stamp danger" style="left:170px;top:330px;border-color:#BD6C73;transform:rotate(-6deg)">Blocked<small>Kevin asked for it, so Kevin can't approve it</small></div>`); el.appendChild(blocked);
+  const ok = $(`<div class="stamp ok" style="left:200px;top:380px;border-color:#7FB59A;transform:rotate(-4deg)">Approved<small>by Pranay J Sathish · Comms writes to 406 customers</small></div>`); el.appendChild(ok);
+  return {
+    cues(s) { cue(s.start, 'whoosh'); cue(s.start + 2.0, 'block'); cue(s.start + 2.05, 'stamp'); cue(s.start + 6.4, 'success', { ok: 1 }); cue(s.start + 6.45, 'stamp'); },
+    render(t, s) {
+      const lt = t - s.start;
+      const ct = lt < 4 ? 0.8 + lt : 4.8 + (lt - 4) * 1.5;
+      f.show(ct, 2.1, 0.88, 0.52);
+      const b = E.back(P(lt, 2.0, 2.35)); set(blocked, P(lt, 2.0, 2.15) * (1 - P(lt, 4.6, 5.0)), `rotate(-6deg) scale(${1.6 - 0.6 * b})`);
+      const o = E.back(P(lt, 6.4, 6.75)); set(ok, P(lt, 6.4, 6.55), `rotate(-4deg) scale(${1.6 - 0.6 * o})`);
+    },
+  };
+});
+
+// 10. MEMORY: motion ---------------------------------------------------------------------------
+scene('memory', (el) => {
+  const head = $(`<div class="abs" style="left:96px;top:90px"><div class="kick">Memory, in the graph</div><div class="h-m" style="margin-top:10px">These agents remember</div></div>`); el.appendChild(head);
+  const layers = $(`<div class="abs" style="left:96px;top:250px;display:flex;gap:14px"><span class="pill">Episodic · past runs</span><span class="pill">Procedural · playbooks</span><span class="pill">Shared · the decision chain</span></div>`); el.appendChild(layers);
+  const past = [
+    ['Suez convoy suspension', 'Port Said · Jul 2026', 'Air-freighted 2 full containers', 'Did not pay off: spent $96,000, saved $41,000', 'danger'],
+    ['Port Klang congestion', 'Jun 2026', 'Rerouted 3 shipments by sea', 'Worked: $18,200 spent, $52,600 avoided', 'ok'],
+    ['Colombo crane outage', 'Apr 2026', 'Rerouted 2 shipments by sea', 'Worked: $9,400 spent, $29,900 avoided', 'ok'],
+  ].map(([n, w, a, o, c], i) => { const e = $(`<div class="card" style="left:96px;top:${340 + i * 175}px;width:600px;padding:20px 26px;border-color:${c === 'danger' ? 'rgba(189,108,115,.6)' : 'rgba(127,181,154,.45)'}">
+      <div style="display:flex;justify-content:space-between"><b style="font-size:26px">${n}</b><span class="muted" style="font-size:19px">${w}</span></div>
+      <div class="muted" style="font-size:21px;margin-top:6px">${a}</div><div class="${c}" style="font-size:21px;font-weight:700;margin-top:6px">${o}</div></div>`); el.appendChild(e); return e; });
+  const pbs = [['When rescuing full containers', 'Air-freight them', 'worked 0 of 1', 'danger'], ['When a transhipment port shuts', 'Reroute root shipments by sea through a neighbouring port', 'worked 2 of 2', 'ok']]
+    .map(([w, a, r, c], i) => { const e = $(`<div class="card" style="left:780px;top:${380 + i * 230}px;width:520px;padding:20px 24px"><div class="kick" style="font-size:15px">Playbook</div><div class="muted" style="font-size:20px;margin-top:6px">${w}</div><div style="font-size:24px;font-weight:700;margin-top:4px">${a}</div><span class="pill ${c === 'danger' ? 'red' : 'green'}" style="font-size:18px;margin-top:12px">${r}</span></div>`); el.appendChild(e); return e; });
+  const svg = S('svg', { width: W, height: H, style: 'position:absolute;left:0;top:0' }); el.insertBefore(svg, el.firstChild);
+  const L = [[696, 410, 780, 450], [696, 590, 780, 680], [696, 760, 780, 700], [1300, 470, 1390, 560], [1300, 700, 1390, 620]].map(([a, b, c, d]) => S('path', { d: `M${a},${b} C${a + 50},${b} ${c - 50},${d} ${c},${d}`, stroke: 'rgba(142,166,255,.55)', 'stroke-width': 3, fill: 'none' }, svg));
+  const fin = $(`<div class="card" style="left:1390px;top:380px;width:460px;padding:26px 28px;border-color:rgba(142,166,255,.55)">
+    <div class="kick" style="font-size:16px">Finance decides</div><div style="font-size:34px;font-weight:760;margin-top:8px">3 rescues by sea</div><div class="muted" style="font-size:22px">0 by air · costs <b style="color:#F1EEF6">$19,180</b></div>
+    <div style="margin-top:20px;display:grid;gap:10px"><div><span class="o1 ok" style="font-size:44px;font-weight:800">$68,257</span><span class="muted" style="font-size:20px"> saved</span></div>
+    <div><span class="o2 ok" style="font-size:44px;font-weight:800">406</span><span class="muted" style="font-size:20px"> orders back on time</span></div>
+    <div class="muted" style="font-size:20px">late fees <b class="danger">$114,065</b> → <b class="ok">$45,808</b></div></div></div>`);
+  el.appendChild(fin);
+  const o1 = fin.querySelector('.o1'), o2 = fin.querySelector('.o2');
+  const tenants = $(`<div class="abs" style="left:96px;top:858px;display:flex;gap:18px;align-items:center"><span class="pill blue">graph: promise_northwind · Northwind Retail</span><span class="pill blue">graph: promise_lumen · Lumen Home Co</span><span class="muted" style="font-size:22px">one isolated graph, and memory, per company</span></div>`);
+  el.appendChild(tenants);
+  return {
+    cues(s) { cue(s.start, 'whoosh'); past.forEach((_, i) => cue(at('r2') - 0.1 + i * 0.35, 'tile', { i })); pbs.forEach((_, i) => cue(at('r2') + 1.4 + i * 0.4, 'pop', { i })); cue(at('r3'), 'send'); cue(at('r4') - 0.05, 'ticks', { dur: 1.3, n: 14 }); cue(at('r5'), 'whoosh'); },
+    render(t) {
+      rise(head, t, at('r1') - 0.3, 0.6); rise(layers, t, at('r1') + 0.3, 0.6);
+      past.forEach((e, i) => rise(e, t, at('r2') - 0.1 + i * 0.35, 0.6, 30));
+      pbs.forEach((e, i) => rise(e, t, at('r2') + 1.4 + i * 0.4, 0.6, 30));
+      L.forEach((p, i) => { const ap = i < 3 ? at('r2') + 1.6 + i * 0.2 : at('r3') + i * 0.15; const len = p.getTotalLength(); p.style.strokeDasharray = len; p.style.strokeDashoffset = len * (1 - E.out(P(t, ap, ap + 0.6))); });
+      const fi = E.back(P(t, at('r3') + 0.3, at('r3') + 0.9)); set(fin, P(t, at('r3') + 0.3, at('r3') + 0.5), `scale(${0.85 + 0.15 * fi})`);
+      o1.textContent = usd(count(t, at('r4') - 0.05, 1.3, 68257)); o2.textContent = fmt(count(t, at('r4') - 0.05, 1.3, 406));
+      rise(tenants, t, at('r5') - 0.1, 0.6);
+    },
+  };
+});
+
+// 11. HONEST: the race -------------------------------------------------------------------------
+const SWEEP = [[2, 19, 25], [3, 19, 24], [4, 30, 96], [5, 30, 103], [6, 29, 98], [7, 30, 98], [8, 32, 102]];
+scene('honest', (el) => {
+  const head = $(`<div class="abs" style="left:96px;top:90px"><div class="kick">A fair race</div><div class="h-m" style="margin-top:10px">FalkorDB <span class="muted">vs</span> Postgres 16 + pgRouting 3.8</div></div>`); el.appendChild(head);
+  const f = footage('bench', { x: 1080, y: 90, w: 760 }); el.appendChild(f.el);
+  const parity = $(`<div class="abs" style="left:96px;top:270px;display:flex;gap:14px"><span class="pill green">✓ identical rows, checked row by row</span><span class="pill">same synthetic data · 20k orders</span></div>`); el.appendChild(parity);
+  // chart
+  const cx = 96, cy = 380, cw = 800, ch = 440;
+  const svg = S('svg', { width: cw + 300, height: ch + 100, style: `position:absolute;left:${cx}px;top:${cy}px` }); el.appendChild(svg);
+  const X = (d) => 60 + (d - 2) / 6 * cw, Y = (ms) => ch - ms / 120 * ch;
+  [0, 30, 60, 90, 120].forEach((m) => { S('line', { x1: 60, x2: 60 + cw, y1: Y(m), y2: Y(m), stroke: 'rgba(146,161,194,.15)' }, svg); const tx = S('text', { x: 46, y: Y(m) + 6, fill: '#92A1C2', 'font-size': 18, 'text-anchor': 'end' }, svg); tx.textContent = m; });
+  SWEEP.forEach(([d]) => { const tx = S('text', { x: X(d), y: ch + 32, fill: '#92A1C2', 'font-size': 18, 'text-anchor': 'middle' }, svg); tx.textContent = d; });
+  const ax = S('text', { x: 60 + cw / 2, y: ch + 66, fill: '#92A1C2', 'font-size': 19, 'text-anchor': 'middle' }, svg); ax.textContent = 'supply-chain steps followed · "which orders are at risk?" · ms, median of 3';
+  const pgP = S('path', { d: SWEEP.map(([d, , p], i) => `${i ? 'L' : 'M'}${X(d)},${Y(p)}`).join(' '), stroke: '#D9A86C', 'stroke-width': 6, fill: 'none', 'stroke-linejoin': 'round' }, svg);
+  const fkP = S('path', { d: SWEEP.map(([d, f], i) => `${i ? 'L' : 'M'}${X(d)},${Y(f)}`).join(' '), stroke: '#8EA6FF', 'stroke-width': 6, fill: 'none', 'stroke-linejoin': 'round' }, svg);
+  const lf = S('text', { x: X(8) + 12, y: Y(32) + 8, fill: '#C9D4FF', 'font-size': 24, 'font-weight': 750 }, svg); lf.textContent = 'FalkorDB ~30 ms';
+  const lp = S('text', { x: X(8) + 12, y: Y(102) + 8, fill: '#D9A86C', 'font-size': 24, 'font-weight': 750 }, svg); lp.textContent = 'Postgres ~100 ms';
+  // clusters, honestly
+  const q3 = $(`<div class="card" style="left:1150px;top:560px;width:700px;padding:24px 28px"><div class="kick" style="font-size:16px">Stranded clusters · 20k orders · end to end</div>
+    <div style="display:grid;grid-template-columns:240px 1fr 90px;gap:12px 14px;align-items:center;margin-top:16px;font-size:22px">
+      <span>Postgres + pgRouting</span><i class="b1" style="height:22px;border-radius:6px;background:#D9A86C;display:block"></i><b>54 ms</b>
+      <span>FalkorDB (algo.WCC)</span><i class="b2" style="height:22px;border-radius:6px;background:#8EA6FF;display:block"></i><b>135 ms</b></div>
+    <div style="margin-top:16px"><span class="pill amber">pgRouting wins this one · we say so</span></div></div>`); el.appendChild(q3);
+  const b1 = q3.querySelector('.b1'), b2 = q3.querySelector('.b2');
+  const bugs = $(`<div class="card" style="left:1150px;top:150px;width:700px;padding:24px 28px"><div class="kick" style="font-size:16px">FalkorDB engine bugs we hit · minimal repros in the repo</div>
+    <div style="display:grid;gap:12px;margin-top:16px;font-size:22px"><div><b class="danger">A</b> · a grouped node loses its relationships</div><div><b class="danger">B</b> · WHERE dropped before a variable-length path <span class="muted">(known upstream, #2972)</span></div><div><b class="danger">C</b> · server panic: collect() over OPTIONAL MATCH</div></div>
+    <div class="tag" style="display:inline-block;margin-top:16px">python -m scripts.repro_falkordb</div></div>`); el.appendChild(bugs);
+  return {
+    cues(s) { cue(s.start, 'impact', { big: 1 }); cue(at('b2') - 0.05, 'success', { ok: 1 }); cue(at('b3') + 0.3, 'riser', { dur: 2.2 }); cue(at('b4') - 0.05, 'blip'); [0, 1, 2].forEach((i) => cue(at('b5') + 0.3 + i * 0.4, 'tile', { i })); },
+    render(t, s) {
+      const lt = t - s.start;
+      rise(head, t, s.start + 0.1, 0.6);
+      const fi = E.out(P(lt, 0.4, 1.0)); set(f.el, fi * (1 - P(t, at('b4') - 0.8, at('b4') - 0.3)), `translateX(${(1 - fi) * 60}px)`); f.show(Math.min(lt * 1.1 + 0.3, 11.5), 1.25, 0.82, 0.42);
+      rise(parity, t, at('b2') - 0.1, 0.6);
+      const d = P(t, at('b3') + 0.2, at('b3') + 3.2);
+      for (const p of [pgP, fkP]) { const len = p.getTotalLength(); p.style.strokeDasharray = len; p.style.strokeDashoffset = len * (1 - E.inout(d)); }
+      svg.style.opacity = E.out(P(t, at('b3') - 0.3, at('b3') + 0.3));
+      lf.style.opacity = lp.style.opacity = P(t, at('b3') + 3.0, at('b3') + 3.5);
+      const qi = E.out(P(t, at('b4') - 0.4, at('b4') + 0.2)); set(q3, qi, `translateY(${(1 - qi) * 30}px)`);
+      b1.style.width = 54 / 135 * 100 * E.out(P(t, at('b4'), at('b4') + 0.8)) + '%'; b2.style.width = 100 * E.out(P(t, at('b4'), at('b4') + 0.8)) + '%';
+      const bi = E.out(P(t, at('b5') + 0.1, at('b5') + 0.7)); set(bugs, bi, `translateY(${(1 - bi) * 30}px)`);
+    },
+  };
+});
+
+// 12. TRACKS: checklist + the agents walking the globe ------------------------------------------
+scene('tracks', (el) => {
+  const f = footage('walk', { x: 960, y: 120, w: 900 }); el.appendChild(f.el);
+  const c2 = $(`<div class="abs" style="left:96px;top:110px;width:820px"><div class="pill blue" style="font-size:22px">Track 2 · Agent Memory &amp; Coordination</div></div>`); el.appendChild(c2);
+  const T2 = ['Episodic memory: runs, decisions, outcomes', 'Procedural memory: playbooks with a track record', 'Shared state: agents hand off through the graph', 'A human gate: the requester can\'t approve', 'One graph per company · 8 runs at once, chains intact'];
+  const T1 = ['Multi-hop reasoning: FEEDS*0..8 in one query', 'Graph algorithms as tools: WCC, betweenness, SPpaths', 'Explainable: every answer is a path you can see'];
+  const i2 = T2.map((x, i) => { const e = $(`<div class="check" style="margin-top:${i ? 14 : 26}px"><b>✓</b><span>${x}</span></div>`); c2.appendChild(e); return e; });
+  const t1h = $(`<div class="pill" style="font-size:22px;margin-top:34px">Track 1 · Agents That Act on Connected Data</div>`); c2.appendChild(t1h);
+  const i1 = T1.map((x, i) => { const e = $(`<div class="check" style="margin-top:${i ? 14 : 22}px"><b>✓</b><span>${x}</span></div>`); c2.appendChild(e); return e; });
+  const cap = $(`<div class="callout" style="left:1010px;top:690px;font-size:24px">The agents' real run, replayed on the globe<small>what each one read and wrote in FalkorDB</small></div>`); el.appendChild(cap);
+  return {
+    cues(s) { cue(s.start, 'whoosh'); i2.forEach((_, i) => cue(at('t2') + i * 1.1, 'tick', { i })); i1.forEach((_, i) => cue(at('t3') + 0.6 + i * 1.0, 'tick', { i: i + 5 })); },
+    render(t, s) {
+      const lt = t - s.start;
+      const fi = E.out(P(lt, 0.1, 0.8)); set(f.el, fi, `translateX(${(1 - fi) * 60}px)`);
+      f.show(3.6 + lt * 1.15, 1.75, 0.38, 0.5);
+      set(cap, E.out(P(lt, 1.5, 2.1)));
+      set(c2, E.out(P(t, at('t1') - 0.2, at('t1') + 0.4)));
+      i2.forEach((e, i) => rise(e, t, at('t2') + i * 1.1, 0.5, 18));
+      rise(t1h, t, at('t3') - 0.1, 0.5, 18);
+      i1.forEach((e, i) => rise(e, t, at('t3') + 0.6 + i * 1.0, 0.5, 18));
+    },
+  };
+});
+
+// 13. OUTRO --------------------------------------------------------------------------------------
+scene('outro', (el) => {
+  const mark = $(`<div class="brand-mark abs" style="left:${960 - 60}px;top:250px;width:120px;height:120px;box-shadow:0 0 120px rgba(142,166,255,.35)"></div>`); el.appendChild(mark);
+  const name = $(`<div class="center" style="top:450px;font-size:120px;font-weight:800;letter-spacing:-.045em;white-space:nowrap">Promise Graph</div>`); el.appendChild(name);
+  const tag = $(`<div class="center h-m" style="top:560px;white-space:nowrap;font-weight:560">Know which promises broke, why, and the cheapest way to keep them.</div>`); el.appendChild(tag);
+  const repo = $(`<div class="center" style="top:660px;white-space:nowrap"><span class="pill blue" style="font-size:26px">github.com/kevinsudhan/ps5-hackathon</span></div>`); el.appendChild(repo);
+  const team = $(`<div class="center muted" style="top:740px;white-space:nowrap;font-size:26px">Team Araxys · Pranay J Sathish · Kevin Sudhan · Manish Arunkumar · Shyam Nair</div>`); el.appendChild(team);
+  const fine = $(`<div class="center muted" style="top:800px;white-space:nowrap;font-size:19px;opacity:.8">Built on FalkorDB for Graph Hacks 2026 · all data synthetic · narration: synthetic voice (Kokoro) · coding assistant: Claude Code (disclosed in the README)</div>`); el.appendChild(fine);
+  return {
+    cues(s) { cue(at('o1') - 0.1, 'impact', { big: 1, warm: 1 }); cue(at('o1'), 'shimmer'); },
+    render(t) {
+      const a = at('o1') - 0.2; const x = E.back(P(t, a, a + 0.8));
+      set(mark, P(t, a, a + 0.3), `rotate(${(1 - x) * 90}deg) scale(${0.3 + 0.7 * x})`);
+      rise(name, t, a + 0.2, 0.7, 30, 'translate(-50%, -50%)');
+      rise(tag, t, at('o2') - 0.1, 0.7, 24, 'translate(-50%, -50%)');
+      rise(repo, t, at('o2') + 1.6, 0.6, 20, 'translate(-50%, -50%)');
+      rise(team, t, at('o2') + 2.2, 0.6, 20, 'translate(-50%, -50%)');
+      rise(fine, t, at('o2') + 2.8, 0.6, 16, 'translate(-50%, -50%)');
+    },
+  };
+});
+
+// ------------------------------------------------------------------ render(t)
+const capEl = document.getElementById('cap'), wm = document.getElementById('wm');
+let DURATION = 180;
+function render(t) {
+  // scenes cross-fade at their boundaries
+  for (const s of TL.scenes) {
+    const sc = scenes[s.id]; if (!sc) continue;
+    const fin = s.start === 0 ? 1 : E.out(P(t, s.start - 0.25, s.start + 0.35));
+    const fout = s.end >= DURATION ? 1 : 1 - E.inout(P(t, s.end - 0.3, s.end + 0.15));
+    const o = Math.min(fin, fout);
+    sc.el.style.opacity = o;
+    sc.el.style.display = o > 0.001 ? 'block' : 'none';
+    sc.el.style.transform = `scale(${1 + (1 - fin) * 0.025 - (1 - fout) * 0.02})`;
+    sc.el.style.filter = o < 1 ? `blur(${(1 - o) * 6}px)` : 'none';
+    if (o > 0.001) sc.render(t, s);
+  }
+  // footage only seeks while its scene is on screen
+  for (const r of videos) { const op = r.el.style.opacity; const on = r.el.closest('.scene').style.display !== 'none' && (op === '' || +op > 0.001); r.active = on && r.want != null; }
+  drawNet(t, 0.55 + 0.45 * Math.sin(t * 0.2) ** 2);
+  // captions
+  const line = TL.vo.find((v) => t >= v.at - 0.05 && t <= v.at + v.dur + 0.35);
+  if (line) { if (capEl.textContent !== line.text) capEl.textContent = line.text; const o = Math.min(P(t, line.at - 0.05, line.at + 0.15), 1 - P(t, line.at + line.dur + 0.15, line.at + line.dur + 0.35)); capEl.style.opacity = o; }
+  else capEl.style.opacity = 0;
+  wm.style.opacity = t > 17 && t < 170.5 ? 0.85 : 0;
+}
+
+const seekVideo = (r) => new Promise((ok) => {
+  const v = r.v, want = Math.min(r.want, (v.duration || 1e9) - 0.04);
+  if (Math.abs(v.currentTime - want) < 0.004) return ok();
+  const done = () => { v.removeEventListener('seeked', done); clearTimeout(to); ok(); };
+  const to = setTimeout(done, 2500);
+  v.addEventListener('seeked', done); v.currentTime = want;
+});
+window.__seek = async (t) => {
+  render(t);
+  await Promise.all(videos.filter((r) => r.active).map(seekVideo));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  return true;
+};
+window.__ready = (async () => {
+  TL = await (await fetch('build/timeline.json')).json();
+  V = Object.fromEntries(TL.vo.map((v) => [v.id, v]));
+  SC = Object.fromEntries(TL.scenes.map((s) => [s.id, s]));
+  DURATION = TL.duration;
+  window.__duration = DURATION;
+  for (const s of TL.scenes) scenes[s.id]?.cues?.(s);
+  cues.sort((a, b) => a.t - b.t);
+  window.__cues = cues;
+  await document.fonts.ready;
+  await Promise.all(videos.map((r) => new Promise((ok) => { if (r.v.readyState >= 2) return ok(); r.v.addEventListener('loadeddata', ok, { once: true }); setTimeout(ok, 8000); })));
+  render(0);
+  return true;
+})();
+// Opened in a browser without ?render: play it in real time (no sound) to preview.
+if (!location.search.includes('render')) {
+  window.__ready.then(() => { const t0 = performance.now(); const tick = async () => { const t = ((performance.now() - t0) / 1000) % DURATION; render(t);
+    for (const r of videos) if (r.active) { if (Math.abs(r.v.currentTime - r.want) > 0.25) r.v.currentTime = r.want; } requestAnimationFrame(tick); }; tick(); });
+}
+</script>
+</body>
+</html>

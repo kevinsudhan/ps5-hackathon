@@ -6,3 +6,12 @@ dist/
 .env
 .DS_Store
 .snapshots/
+
+# demo video: big or regenerable outputs (see video/HANDOFF-VIDEO.md)
+video/clips/
+video/stills/
+video/*.mp4
+video/build/music.wav
+video/build/sfx.wav
+video/build/mix.wav
+video/build/vo/*.key

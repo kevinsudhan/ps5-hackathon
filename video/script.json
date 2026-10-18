@@ -1,0 +1,341 @@
+{
+ "about": "Promise Graph demo video, scene by scene. voice.py speaks each line (Kokoro, local), lays the lines out on the beat and writes build/timeline.json, which index.html, the music and the mix all read. A line's text may carry a pronunciation as [word](/phonemes/); 'show' is the caption text when it differs. 'pre' waits before a line, 'gap' after it; 'snap' puts its start on the next beat. A scene's 'hold' is extra time after its last line. Every figure is from the live app on Oct 18 (northwind, Singapore closure).",
+ "bpm": 120,
+ "voice": "af_heart",
+ "speed": 1.05,
+ "scenes": [
+  {
+   "id": "hook",
+   "music": "intro",
+   "lines": [
+    {
+     "id": "h1",
+     "text": "Every order is a promise.",
+     "pre": 0.7,
+     "gap": 0.5
+    },
+    {
+     "id": "h2",
+     "text": "A date you gave a customer.",
+     "gap": 1.0
+    },
+    {
+     "id": "h3",
+     "text": "So when a port shuts down, the question isn't which ships are stuck.",
+     "gap": 0.2
+    },
+    {
+     "id": "h4",
+     "text": "It's which promises just broke.",
+     "snap": true
+    }
+   ],
+   "hold": 0.5
+  },
+  {
+   "id": "logo",
+   "music": "impact",
+   "lines": [
+    {
+     "id": "l1",
+     "text": "This is Promise Graph.",
+     "pre": 0.4,
+     "gap": 0.3
+    },
+    {
+     "id": "l2",
+     "text": "Agents with a memory, built on [FalkorDB](/fˈælkɔɹ dˌi bˈi/).",
+     "show": "Agents with a memory, built on FalkorDB."
+    }
+   ],
+   "hold": 1.4
+  },
+  {
+   "id": "problem",
+   "music": "grooveA",
+   "lines": [
+    {
+     "id": "p1",
+     "text": "Singapore's terminals go dark for five days.",
+     "pre": 0.2,
+     "gap": 0.3
+    },
+    {
+     "id": "p2",
+     "text": "One stuck shipment holds up the next, and the next, five steps down the supply chain, until it reaches a customer's door.",
+     "gap": 0.3
+    },
+    {
+     "id": "p3",
+     "text": "That's a graph. So we built it as one.",
+     "snap": true
+    }
+   ],
+   "hold": 0.4
+  },
+  {
+   "id": "model",
+   "music": "grooveA",
+   "lines": [
+    {
+     "id": "m1",
+     "text": "Customers, orders, promises and shipments, linked by what feeds what, in [FalkorDB](/fˈælkɔɹ dˌi bˈi/).",
+     "show": "Customers, orders, promises and shipments, linked by what feeds what, in FalkorDB.",
+     "pre": 0.2,
+     "gap": 0.3
+    },
+    {
+     "id": "m2",
+     "text": "One variable-length query follows the delay, hop by hop, and keeps every promise that now misses its date."
+    }
+   ],
+   "hold": 0.6
+  },
+  {
+   "id": "answer",
+   "music": "grooveB",
+   "lines": [
+    {
+     "id": "a1",
+     "text": "Seven hundred and fifty-five orders. A hundred and fourteen thousand dollars in late fees.",
+     "show": "755 orders. $114,065 in late fees.",
+     "pre": 0.2,
+     "gap": 0.3
+    },
+    {
+     "id": "a2",
+     "text": "Each one traced back to a shipment stuck in Singapore, on the real map.",
+     "gap": 0.3
+    },
+    {
+     "id": "a3",
+     "text": "Ask in plain English. The AI only picks a template. [FalkorDB](/fˈælkɔɹ dˌi bˈi/) answers, and shows its query.",
+     "show": "Ask in plain English. The AI only picks a template. FalkorDB answers, and shows its query."
+    }
+   ],
+   "hold": 0.4
+  },
+  {
+   "id": "why",
+   "music": "grooveB",
+   "lines": [
+    {
+     "id": "w1",
+     "text": "Why is Aisha's order late?",
+     "snap": true,
+     "gap": 0.3
+    },
+    {
+     "id": "w2",
+     "text": "Here's her chain on a calendar: where each day of delay came from, and where buffer soaked some up.",
+     "gap": 0.3
+    },
+    {
+     "id": "w3",
+     "text": "Turn on Step by step, and the graph shows its work.",
+     "snap": true
+    }
+   ],
+   "hold": 1.6
+  },
+  {
+   "id": "engines",
+   "music": "grooveB",
+   "lines": [
+    {
+     "id": "e1",
+     "text": "Flip the engine to Postgres, and the same question comes back with the same rows.",
+     "pre": 0.2,
+     "gap": 0.2
+    },
+    {
+     "id": "e2",
+     "text": "Compare puts both queries side by side.",
+     "snap": true
+    }
+   ],
+   "hold": 1.0
+  },
+  {
+   "id": "agents",
+   "music": "drop",
+   "lines": [
+    {
+     "id": "g1",
+     "text": "Then six agents take over, and they coordinate through the graph.",
+     "pre": 0.2,
+     "gap": 0.3
+    },
+    {
+     "id": "g2",
+     "text": "Sentinel ranks the port with betweenness.",
+     "snap": true,
+     "gap": 0.05
+    },
+    {
+     "id": "g3",
+     "text": "The Impact Analyst follows the cascade, and splits it with connected components.",
+     "snap": true,
+     "gap": 0.05
+    },
+    {
+     "id": "g4",
+     "text": "The Rerouter finds shortest paths around the closure.",
+     "snap": true,
+     "gap": 0.05
+    },
+    {
+     "id": "g5",
+     "text": "Finance prices every rescue.",
+     "snap": true,
+     "gap": 0.05
+    },
+    {
+     "id": "g6",
+     "text": "And the Verifier re-checks every number.",
+     "snap": true,
+     "gap": 0.3
+    },
+    {
+     "id": "g7",
+     "text": "Each one reads the last decision from the graph, and writes its own."
+    }
+   ],
+   "hold": 1.2
+  },
+  {
+   "id": "gate",
+   "music": "breakdown",
+   "lines": [
+    {
+     "id": "k1",
+     "text": "Spending money needs a person,",
+     "pre": 0.3,
+     "gap": 0.1
+    },
+    {
+     "id": "k2",
+     "text": "and whoever asked can't approve it.",
+     "gap": 0.5
+    },
+    {
+     "id": "k3",
+     "text": "Approved? Comms writes to the customers, and records how it went.",
+     "snap": true
+    }
+   ],
+   "hold": 1.0
+  },
+  {
+   "id": "memory",
+   "music": "tension",
+   "lines": [
+    {
+     "id": "r1",
+     "text": "Because these agents remember.",
+     "pre": 0.2,
+     "gap": 0.3
+    },
+    {
+     "id": "r2",
+     "text": "In July, air-freighting containers around Suez didn't pay off.",
+     "gap": 0.2
+    },
+    {
+     "id": "r3",
+     "text": "So this time, Finance rescues three shipments by sea, for nineteen thousand dollars.",
+     "show": "So this time, Finance rescues three shipments by sea, for $19,180.",
+     "gap": 0.1
+    },
+    {
+     "id": "r4",
+     "text": "Sixty-eight thousand saved. Four hundred and six orders back on time.",
+     "show": "$68,257 saved. 406 orders back on time.",
+     "snap": true,
+     "gap": 0.3
+    },
+    {
+     "id": "r5",
+     "text": "Every company gets its own graph, and its own memory."
+    }
+   ],
+   "hold": 0.9
+  },
+  {
+   "id": "honest",
+   "music": "drop2",
+   "lines": [
+    {
+     "id": "b1",
+     "text": "We raced [FalkorDB](/fˈælkɔɹ dˌi bˈi/) against a tuned Postgres with P G Routing.",
+     "show": "We raced FalkorDB against a tuned Postgres with pgRouting.",
+     "pre": 0.2,
+     "gap": 0.1
+    },
+    {
+     "id": "b2",
+     "text": "Same data. Identical answers, checked row by row.",
+     "snap": true,
+     "gap": 0.2
+    },
+    {
+     "id": "b3",
+     "text": "On the deep question, [FalkorDB](/fˈælkɔɹ dˌi bˈi/) stays near thirty milliseconds. Postgres climbs to around a hundred.",
+     "show": "On the deep question, FalkorDB stays near 30 ms. Postgres climbs to around 100.",
+     "gap": 0.2
+    },
+    {
+     "id": "b4",
+     "text": "On clusters, P G Routing wins. We say so.",
+     "show": "On clusters, pgRouting wins. We say so.",
+     "snap": true,
+     "gap": 0.3
+    },
+    {
+     "id": "b5",
+     "text": "And we wrote minimal repros for three engine bugs we found."
+    }
+   ],
+   "hold": 0.4
+  },
+  {
+   "id": "tracks",
+   "music": "grooveB",
+   "lines": [
+    {
+     "id": "t1",
+     "text": "That's Track two: agent memory and coordination.",
+     "pre": 0.3,
+     "gap": 0.2
+    },
+    {
+     "id": "t2",
+     "text": "Episodic, procedural and shared memory. Handoffs through the graph. A human gate. One graph per company.",
+     "gap": 0.3
+    },
+    {
+     "id": "t3",
+     "text": "And Track one: multi-hop reasoning, with graph algorithms as the agents' tools."
+    }
+   ],
+   "hold": 0.8
+  },
+  {
+   "id": "outro",
+   "music": "outro",
+   "lines": [
+    {
+     "id": "o1",
+     "text": "Promise Graph.",
+     "pre": 0.5,
+     "gap": 0.3
+    },
+    {
+     "id": "o2",
+     "text": "Know which promises broke, why, and the cheapest way to keep them."
+    }
+   ],
+   "hold": 3.4
+  }
+ ]
+}
