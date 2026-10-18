@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agents, influence, memory, nl, questions, story, views
+from . import agents, geo, influence, memory, nl, questions, runviz, story, timeline, views
 from . import falkor_store as fs
 from . import pg_store as ps
 from .config import graph_name, to_date
@@ -346,6 +346,12 @@ def recall(tenant: str, event_id: str):
     g = _graph(tenant)
     _event_exists(g, event_id)
     return {"recall": memory.recall(g, event_id), "playbooks": memory.playbooks(g, event_id)}
+
+
+# Views added Oct 18: globe coordinates, order timeline, agent run graph (one module each).
+app.include_router(geo.router)
+app.include_router(timeline.router)
+app.include_router(runviz.router)
 
 
 # Mounted last so every /api route above wins.

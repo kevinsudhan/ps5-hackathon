@@ -1,0 +1,101 @@
+/* Order timeline (components/OrderTimeline.tsx). Colours come from tokens.css; prefix otl-. */
+
+.otl { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 46px 16px 10px; }
+.otl.otl-anim { animation: fade var(--dur-2) var(--ease) both; }
+.otl-scroll { position: relative; flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+.otl-svg { display: block; overflow: visible; font-family: var(--font); font-variant-numeric: tabular-nums; }
+
+/* rows and calendar */
+.otl-band { fill: transparent; }
+.otl-band.alt { fill: rgba(146, 161, 194, 0.035); }
+.otl-band.port { fill: rgba(189, 108, 115, 0.05); }
+.otl-band.order { fill: rgba(146, 161, 194, 0.07); }
+.otl-grid { stroke: rgba(146, 161, 194, 0.08); stroke-width: 1; }
+.otl-grid.month { stroke: rgba(146, 161, 194, 0.2); }
+.otl-tick { fill: var(--text-2); font-size: 11px; font-weight: 500; }
+.otl-break-band { fill: rgba(9, 11, 26, 0.32); }
+.otl-break-edge { stroke: rgba(146, 161, 194, 0.22); stroke-width: 1; stroke-dasharray: 1 3; }
+.otl-break-label { fill: var(--mauve); font-size: 10.5px; font-weight: 600; font-style: italic; }
+.otl-cut { stroke: #1A1E39; stroke-width: 3; stroke-linecap: round; fill: none; }
+.otl-closed-bg { fill: rgba(189, 108, 115, 0.1); }
+.otl-backlog-bg { fill: rgba(189, 108, 115, 0.045); }
+.otl-hatch-bg { fill: rgba(189, 108, 115, 0.16); }
+.otl-hatch-line { stroke: rgba(189, 108, 115, 0.6); stroke-width: 2; }
+
+/* text */
+.otl-title { fill: var(--text); font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+.otl-sub { fill: var(--text-2); font-size: 11.5px; font-weight: 500; }
+.otl-edge { stroke: var(--divider); stroke-width: 1; }
+/* notes and labels sit on a halo of the background, so connectors pass behind them */
+.otl-note, .otl-late-label, .otl-gap-label { paint-order: stroke; stroke: rgba(25, 29, 55, 0.92); stroke-width: 4px; stroke-linejoin: round; }
+.otl-note { fill: var(--text-2); font-size: 11.5px; font-weight: 500; }
+.otl-note.ok { fill: var(--ok); font-weight: 600; }
+.otl-note.danger { fill: var(--danger-text); }
+.otl-late-label { fill: var(--danger-text); font-size: 12.5px; font-weight: 700; }
+.otl-gap-label { fill: var(--danger-text); font-size: 13px; font-weight: 700; }
+.otl-badge { fill: var(--surface-solid); stroke: var(--periwinkle); stroke-width: 1.4; }
+.otl-badge.port { fill: var(--danger); stroke: none; }
+.otl-badge.order { fill: var(--periwinkle); stroke: none; }
+.otl-badge-text { fill: var(--text); font-size: 10.5px; font-weight: 700; }
+.otl-badge-text.dark { fill: var(--bg); font-size: 12px; font-weight: 800; }
+
+/* marks */
+.otl-closed { fill: var(--danger); }
+.otl-backlog { stroke: rgba(189, 108, 115, 0.7); stroke-width: 1; }
+.otl-plan { fill: rgba(146, 161, 194, 0.3); stroke: rgba(146, 161, 194, 0.75); stroke-width: 1; }
+.otl-plan.clipped { fill: rgba(146, 161, 194, 0.18); stroke-dasharray: 3 2; }   /* left before the calendar starts */
+.otl-late { fill: var(--danger); }
+.otl-notch { fill: var(--ok); }
+.otl-gap { fill: rgba(189, 108, 115, 0.32); stroke: var(--danger); stroke-width: 1; }
+.otl-stuck { fill: var(--bg); stroke: var(--danger-text); stroke-width: 2; }
+.otl-leave { fill: var(--text); }
+.otl-link { fill: none; stroke: var(--danger); stroke-width: 1.6; stroke-linejoin: round; }
+.otl-link-plan { stroke: rgba(146, 161, 194, 0.5); stroke-width: 1; stroke-dasharray: 2 3; }
+.otl-promise-line { stroke: var(--text); stroke-opacity: 0.55; stroke-width: 1.2; stroke-dasharray: 4 4; }
+.otl-promise-mark { fill: var(--bg); stroke: var(--text); stroke-width: 1.6; }
+.otl-arrive-mark { fill: var(--danger); stroke: var(--danger-text); stroke-width: 1.2; }
+.otl-pill { fill: var(--surface-solid); stroke: var(--border-strong); stroke-width: 1; }
+.otl-pill-text { fill: var(--text); font-size: 11.5px; font-weight: 650; }
+
+/* hover / focus */
+.otl-row { cursor: default; outline: none; }
+.otl-row:hover .otl-plan, .otl-row:focus-visible .otl-plan { fill: rgba(146, 161, 194, 0.48); stroke: var(--text); }
+.otl-row:hover .otl-title, .otl-row:focus-visible .otl-title { fill: #fff; }
+.otl-row:focus-visible .otl-badge { stroke: var(--text); stroke-width: 2.4; }
+
+.otl-tip { position: absolute; z-index: 6; width: max-content; max-width: 360px; pointer-events: none;
+  padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface-raised); backdrop-filter: var(--blur);
+  border: 1px solid var(--border-strong); box-shadow: var(--shadow-2); font-size: var(--fs-xs); color: var(--text); }
+.otl-tip b { display: block; font-size: var(--fs-sm); margin-bottom: 6px; }
+.otl-tip dl { margin: 0; display: grid; gap: 3px; }
+.otl-tip dl > div { display: grid; grid-template-columns: 66px 1fr; gap: 8px; }
+.otl-route { margin: 7px 0 0; padding: 6px 0 0 16px; border-top: 1px solid var(--divider); display: grid; gap: 1px;
+  color: var(--text-2); font-size: 11.5px; line-height: 1.35; }
+.otl-tip dt { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.otl-tip dd { margin: 0; }
+.otl-tip dd.danger { color: var(--danger-text); }
+.otl-tip dd.ok { color: var(--ok); }
+.otl-tip p { margin: 7px 0 0; color: var(--text-2); }
+
+/* legend */
+.otl-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; padding-top: 10px; font-size: var(--fs-xs); color: var(--text-2); }
+.otl-foot .spacer { flex: 1; }
+.otl-key { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.otl-key i { display: inline-block; width: 16px; height: 8px; border-radius: 2px; }
+.otl-key .k-plan { background: rgba(146, 161, 194, 0.3); box-shadow: inset 0 0 0 1px rgba(146, 161, 194, 0.75); }
+.otl-key .k-late { background: var(--danger); }
+.otl-key .k-ok { background: var(--ok); }
+.otl-key .k-closed { background: linear-gradient(90deg, var(--danger) 55%, rgba(189, 108, 115, 0.35) 55%); }
+.otl-key .k-promise { width: 0; height: 12px; border-left: 1.5px dashed var(--text); border-radius: 0; opacity: 0.7; }
+.otl-warn { color: var(--delayed); }
+.otl-replay { margin-left: 4px; }
+
+/* motion: the delay flows down the chain (only with .otl-anim, which reduced motion leaves off) */
+.otl-anim .otl-fade { animation: otl-fade 380ms var(--ease) both; animation-delay: var(--d, 0s); }
+.otl-anim .otl-grow { transform-box: fill-box; transform-origin: 0 50%; animation: otl-grow 480ms var(--ease) both; animation-delay: var(--d, 0s); }
+.otl-anim .otl-pop { transform-box: fill-box; transform-origin: 50% 50%; animation: otl-pop 420ms var(--ease) both; animation-delay: var(--d, 0s); }
+.otl-anim .otl-draw { stroke-dasharray: 1 1; animation: otl-draw 340ms var(--ease-in-out) both; animation-delay: var(--d, 0s); }
+@keyframes otl-fade { from { opacity: 0; } }
+@keyframes otl-grow { from { transform: scaleX(0); } }
+@keyframes otl-pop { from { transform: scale(0.2); opacity: 0; } }
+@keyframes otl-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }

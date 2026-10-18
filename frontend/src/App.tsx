@@ -11,7 +11,7 @@ import { useLoad } from './lib/useLoad'
 import { AskDock } from './components/AskDock'
 import { CompareSheet } from './components/CompareSheet'
 import { Drawer, type Tab } from './components/Drawer'
-import { GraphStage } from './components/GraphStage'
+import { GraphStage, type StageView } from './components/GraphStage'
 import { MemoryCompare } from './components/MemoryCompare'
 import { ResponsePanel, type Phase } from './components/Response'
 import { StoryCaption, useStoryPlayer } from './components/Story'
@@ -180,7 +180,10 @@ export default function App() {
   useEffect(() => () => stopStream.current?.(), [])
 
   // ---- view, drawers, sheets -------------------------------------------------------------------
-  const [view, setView] = useState<'2d' | '3d'>(() => (store.get(VIEW_KEY) === '3d' ? '3d' : '2d'))
+  const [view, setView] = useState<StageView>(() => {
+    const v = store.get(VIEW_KEY)
+    return v === 'map' || v === 'timeline' || v === 'agents' ? v : '2d'
+  })
   useEffect(() => { store.set(VIEW_KEY, view) }, [view])
   const [comparingEngines, setComparingEngines] = useState(false)
   const [comparingMemory, setComparingMemory] = useState(false)
@@ -250,6 +253,7 @@ export default function App() {
                 graph={story.view?.graph ?? a?.graph ?? null} animKey={animKey} loading={asking}
                 title={playing ? undefined : a?.title} reveal={story.view?.reveal ?? null} focus={story.view?.focus ?? null}
                 flyKey={story.view?.flyKey ?? 0} story={playing} view={view} onView={setView}
+                tenant={tenant} eventId={event?.id ?? null} answer={a ?? null} run={run}
               >
                 {story.view && <StoryCaption view={story.view} onSkip={story.stop} />}
                 {story.error && !playing && <div className="story-caption"><div className="notice err">The story could not start: {story.error}</div></div>}

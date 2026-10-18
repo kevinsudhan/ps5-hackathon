@@ -1,0 +1,79 @@
+/* The globe view (components/WorldMap.tsx). Colours come from tokens.css. */
+
+.wm { position: absolute; inset: 0; overflow: hidden; animation: fade var(--dur-2) var(--ease) both;
+  background: radial-gradient(ellipse at 50% 55%, rgba(63, 91, 141, 0.18), transparent 62%); }
+.wm-globe { position: absolute; inset: 0; }
+.wm-globe canvas { display: block; outline: none; }
+.wm .scene-nav-info { display: none; }
+
+.wm-status { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 5;
+  display: inline-flex; gap: 8px; align-items: center; padding: 6px 12px; border-radius: var(--radius-pill);
+  font-size: var(--fs-xs); color: var(--text-2); background: var(--surface-raised); border: 1px solid var(--border); }
+
+.wm .tone-danger { --tone: var(--danger); --tone-text: var(--danger-text); }
+.wm .tone-warning { --tone: var(--delayed); --tone-text: var(--delayed); }
+.wm .tone-good { --tone: var(--ok); --tone-text: var(--ok); }
+.wm .tone-neutral { --tone: var(--other); --tone-text: var(--text-2); }
+.wm .tone-muted { --tone: var(--mauve); --tone-text: var(--text-2); }
+
+/* ---- markers: a dot on the place, its name beside it ---------------------------------------- */
+.wm-mk { position: relative; width: 0; height: 0; transition: opacity var(--dur-2) var(--ease); }
+.wm-mk.wm-far { opacity: 0; pointer-events: none; }
+.wm-mk.wm-far * { pointer-events: none !important; }
+.wm-mk.dim { opacity: 0.32; }
+.wm-dot {
+  position: absolute; left: calc(var(--sz) / -2); top: calc(var(--sz) / -2); width: var(--sz); height: var(--sz);
+  padding: 0; border: 0; border-radius: 50%; cursor: pointer; pointer-events: auto;
+  background: var(--tone);
+  box-shadow: 0 0 0 2px rgba(23, 27, 51, 0.92), 0 0 0 3px color-mix(in srgb, var(--tone) 55%, transparent), 0 0 16px color-mix(in srgb, var(--tone) 70%, transparent);
+  color: var(--text-on-accent); font: 700 10px/1 var(--font); letter-spacing: -0.02em; display: grid; place-items: center;
+  transition: transform var(--dur-1) var(--ease);
+}
+.wm-dot:hover, .wm-dot:focus-visible { transform: scale(1.18); outline: none; }
+.wm-dot:focus-visible { box-shadow: var(--focus-ring); }
+.wm-mk.group .wm-dot { font-size: 10.5px; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--tone) 70%, white), var(--tone) 70%); }
+.wm-mk.ring .wm-dot { box-shadow: 0 0 0 2px rgba(23, 27, 51, 0.92), 0 0 0 4px rgba(189, 108, 115, 0.55), 0 0 24px rgba(189, 108, 115, 0.8); }
+
+.wm-label {
+  position: absolute; left: calc(var(--sz) / 2 + 7px); top: 0; transform: translateY(-50%);
+  display: grid; gap: 1px; padding: 3px 8px 4px; border-radius: 7px; white-space: nowrap; cursor: pointer;
+  background: rgba(23, 27, 51, 0.8); border: 1px solid var(--border); backdrop-filter: blur(6px);
+  font-size: 11.5px; line-height: 1.25; color: var(--text); pointer-events: none;
+  opacity: 0; transition: opacity var(--dur-1) var(--ease);
+}
+.wm-label b { font-weight: 650; }
+.wm-label small { font-size: 10.5px; color: var(--tone-text); font-weight: 600; }
+.wm-mk.label-on .wm-label { opacity: 1; pointer-events: auto; }
+.wm-mk.flip .wm-label { left: auto; right: calc(var(--sz) / 2 + 7px); text-align: right; }
+.wm-mk.crowded .wm-label { opacity: 0; pointer-events: none; }
+.wm-mk:hover .wm-label, .wm-mk.crowded:hover .wm-label { opacity: 1; pointer-events: auto; }
+.wm-mk:hover { z-index: 999999 !important; }
+
+/* ---- hop labels on a chain ("+8d Radio modules") -------------------------------------------- */
+.wm-chip-at { position: relative; width: 0; height: 0; }
+.wm-chip-at.wm-far .wm-chip, .wm-chip-at.crowded .wm-chip { opacity: 0; pointer-events: none; }
+.wm-chip {
+  position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
+  display: inline-flex; gap: 6px; align-items: baseline; padding: 3px 8px; border-radius: var(--radius-pill);
+  background: rgba(23, 27, 51, 0.84); border: 1px solid color-mix(in srgb, var(--tone) 55%, transparent);
+  color: var(--text); font: 600 11px/1.3 var(--font); white-space: nowrap; cursor: pointer; pointer-events: auto;
+  transition: opacity var(--dur-2) var(--ease);
+}
+.wm-chip b { color: var(--tone-text); font-weight: 750; }
+
+/* ---- tooltips (globe.gl's float-tooltip) ------------------------------------------------------ */
+.wm .float-tooltip-kap { background: none !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; }
+.wm-tip { padding: 5px 9px; border-radius: 7px; background: var(--surface-raised); border: 1px solid var(--border-strong);
+  color: var(--text); font: 500 12px/1.4 var(--font); box-shadow: var(--shadow-2); max-width: 320px; white-space: normal; }
+
+/* ---- legend keys -------------------------------------------------------------------------------- */
+.wm-legend { max-width: calc(100% - 140px); }
+.wm-key { display: inline-block; flex: none; }
+.wm-key.line { width: 16px; height: 3px; border-radius: 2px; background: var(--tone); box-shadow: 0 0 6px var(--tone); }
+.wm-key.dashed { width: 16px; height: 0; border-top: 2px dashed var(--danger); }
+.wm-key.ring { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 3px rgba(189, 108, 115, 0.35); }
+.wm-key.group { width: 12px; height: 12px; border-radius: 50%; background: var(--danger); opacity: 0.9; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wm, .wm-mk, .wm-label, .wm-dot, .wm-chip { animation: none; transition: none; }
+}
