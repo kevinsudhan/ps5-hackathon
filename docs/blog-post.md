@@ -26,9 +26,13 @@ down the supply chain before it reaches her.
 
 Six agents work through each disruption (spot it, measure it, find routes around it, price the
 rescue, verify the numbers, then write to customers once a person approves), and they hand off by
-writing `Decision` nodes into the same FalkorDB graph. That graph is also their memory: the next time
-a port near Singapore closes, they recall that air-freighting containers during a Suez convoy
-suspension cost $96,000 to save $41,000, and they don't propose it again.
+writing `Decision` nodes into the same FalkorDB graph. That graph is also their memory. Each approved
+plan records the saving it expected and, later, the saving it actually delivered, so every learned habit
+has a track record. Air-freighting full containers during a Suez convoy suspension was expected to avoid
+$148,000 in late fees and avoided $41,000: 28%. When LA and Long Beach strike into Thanksgiving week,
+air-freighting five containers looks like a $272,000 win on paper. Priced at 28%, it loses about
+$220,000, so the agents propose not to. Run the same analysis with memory switched off and they book
+the air freight.
 
 The core query is a cascade: start at the shipments that touch the closed port, follow
 `FEEDS` relationships up to eight steps, carry the delay along the path minus each step's buffer, and

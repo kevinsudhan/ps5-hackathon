@@ -84,16 +84,28 @@ graph LR
 | `Decision` | `id`, `agent`, `kind` (alert, recall, impact, reroute, plan, verification, message), `summary`, `explanation`, `explanation_source` (template or gemini), `status`, `requires_approval`, `numbers` (JSON), `seq`, `created_at` | One agent's output; the unit of handoff |
 | `Cluster` | `id`, `n`, `shipments`, `promises_at_risk`, `penalty_usd` | A stranded cluster found by WCC |
 | `RouteOption` | `id`, `root`, `option` (cheapest, fastest), `hubs`, `modes`, `days`, `usd_per_kg`, `cost_usd`, `new_eta_day`, `residual_delay` | A reroute the Rerouter proposed |
-| `Outcome` | `summary`, `cost_usd`, `saved_usd`, `promises_saved`, `worked`, `expected` | What a plan achieved (or is expected to) |
+| `Outcome` | `summary`, `cost_usd`, `saved_usd`, `promises_saved`, `worked`, `expected` | What a plan achieved (`expected: false`, a real outcome) or is forecast to (`expected: true`) |
 | `Playbook` | `id`, `event_type`, `trigger`, `action`, `uses`, `successes` | A learned rule, updated every time a plan follows it |
 
 | Memory type | Lives in | Where it changes behaviour |
 |---|---|---|
 | Semantic | The world graph above | Every query |
 | Episodic | `Run`, `Decision`, `Outcome` | The Sentinel recalls past runs at the same hub, one lane away, or of the same kind, with their outcome |
-| Procedural | `Playbook` | Finance rules out air freight for full containers because that playbook is 0 for 1 (seeded Suez history) |
+| Procedural | `Playbook`, its track record via `FOLLOWED` plans and their real `Outcome`s | Finance scales each option's expected saving by its habit's track record (actual / expected saving): air freight for full containers 28% (Suez), sea reroutes 95%. On LA / Long Beach this flips the plan from air freight to no rescue |
 | Shared state / handoffs | `Decision`-`NEXT`->`Decision` inside a `Run`, plus `Cluster` and `RouteOption` nodes | The Rerouter reads clusters from the Impact Analyst's decision; Finance reads route options from the Rerouter's |
 | Per tenant | One graph per company | `northwind` and `lumen` never share a node; `scripts/concurrency.py` checks it |
+
+Memory influence and the comparison (Oct 17):
+
+```
+(plan:Decision)-[:USED_MEMORY {realization, effect: 'changed'|'checked'}]->(:Playbook)
+(past:Decision)-[:FOLLOWED]->(:Playbook), (past)-[:RESULTED_IN]->(:Outcome {expected: false})
+(:Run {memory: 'off'})-[:COUNTERFACTUAL_OF]->(:Run)      // the same analysis, memory switched off
+Decision.ms                                              // duration of the agent step that wrote it
+```
+
+A seeded plan's `numbers.saved_usd` is the saving it expected when approved; its outcome's `saved_usd`
+is what it actually saved. Recall only counts disruptions that started before the current one.
 
 The three past disruptions (Colombo Apr 2026, Port Klang Jun 2026, Suez Jul 2026) and their runs are
 **seeded synthetic history** (`backend/promisegraph/history.py`), written through the same memory

@@ -47,7 +47,7 @@ def test_agents_end_to_end(g):
     plan = next(d for d in decs if d["kind"] == "plan")
     assert plan["requires_approval"] and plan["status"] == "verified"
     assert plan["numbers"]["promises_before"] == len(fs.cascade(g, LIVE[0], DEPTH))
-    # memory did real work: the failed Suez air-freight playbook rules out air for full containers
+    # memory recalled the failed Suez air-freight run (tests/test_memory_features.py: how it changes plans)
     assert any(r["event_id"] == "EV-EGPSD-0715" and not r["worked"] for r in run["recall"])
 
     with pytest.raises(agents.PolicyError):

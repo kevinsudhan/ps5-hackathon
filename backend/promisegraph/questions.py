@@ -20,7 +20,6 @@ from . import pg_store as ps
 from .config import to_date
 
 MAX_ROWS = 200
-GRAPH_CAP = 120   # broken orders drawn individually; the rest are grouped
 
 
 def _day(day_or_iso) -> str:
@@ -159,59 +158,153 @@ def at_risk_answer(rows, p, ctx):
     ev = ctx["events"][p["event"]]
     where = f" from {p['city']} customers" if p.get("city") else ""
     if not rows:
-        return f"No orders{where} are hurt by {ev['short']}."
+        return f"No orders{where} are late because {ev['short']}."
     fee = sum(r[6] for r in rows)
     ports = " and ".join(sorted({ctx["hubs"].get(r[10], r[10]) for r in rows}))
     return (f"{_plural(len(rows), 'order')}{where} will arrive late because {ev['short']}, "
             f"with {_usd(fee)} in late fees. Each one traces back to a shipment stuck at {ports}.")
 
 
+def _metric(value, unit: str, label: str) -> dict:
+    """A node's ranked figure, straight from the rows (the UI sizes and labels by it, never computes it)."""
+    return {"value": value, "unit": unit, "label": label}
+
+
+def _cause(ev: dict, ports: list[str], ctx: dict, rows_by_port: dict[str, int] | None = None):
+    """The disruption and the places it closed: the left end of every disruption answer."""
+    nodes = {ev["id"]: {"id": ev["id"], "kind": "event", "label": ev["name"], "tone": "danger", "size": 2, "step": 0,
+                        "why": [ev["name"] + ".", f"Closed {ev['when']}, then {ev['backlog']} more days to clear the backlog."]}}
+    links = []
+    for port in ports:
+        name = ctx["hubs"].get(port, port)
+        n = (rows_by_port or {}).get(port)
+        nodes[port] = {"id": port, "kind": "port", "label": name, "tone": "danger", "size": 3, "step": 0,
+                       "why": [f"{name} is shut during the disruption."] +
+                              ([f"{_plural(n, 'shipment')} on the way through it {'is' if n == 1 else 'are'} now stuck."] if n else [])}
+        links.append({"source": ev["id"], "target": port, "tone": "danger", "label": "shut", "weight": 1,
+                      "why": [f"{ev['name']} closes {name}."]})
+    return nodes, links
+
+
 def at_risk_graph(rows, p, ctx):
+    """Disruption -> closed ports -> stuck shipments (ranked by late fees) -> their late orders, grouped
+    with counts. Only what answers the question; a named persona's order is drawn on its own."""
     ev = ctx["events"][p["event"]]
-    nodes, links = {}, []
-    nodes[ev["id"]] = {"id": ev["id"], "kind": "event", "label": ev["name"], "tone": "danger", "size": 2,
-                       "step": 0, "why": [ev["name"] + ".", f"Closed {ev['when']}, then {ev['backlog']} more days to clear the backlog."]}
     by_root: dict[str, list] = {}
     for r in rows:
         by_root.setdefault(r[8], []).append(r)
-    for port in sorted({r[10] for r in rows} or set(ev["hubs"])):
-        name = ctx["hubs"].get(port, port)
-        n_roots = len({r[8] for r in rows if r[10] == port})
-        nodes[port] = {"id": port, "kind": "port", "label": name, "tone": "danger", "size": 3, "step": 0,
-                       "why": [f"{name} is shut during the disruption.",
-                               f"{_plural(n_roots, 'shipment')} on the way through it {'is' if n_roots == 1 else 'are'} now stuck."]}
-        links.append({"source": ev["id"], "target": port, "tone": "danger", "label": "shut",
-                      "why": [f"{ev['name']} closes {name}."]})
-    keep = set(r[0] for r in rows[:GRAPH_CAP]) | {r[0] for r in rows if r[2] == ctx.get("persona")}
-    for root, rs in sorted(by_root.items(), key=lambda kv: -sum(r[6] for r in kv[1])):
-        port = rs[0][10]
-        fee = sum(r[6] for r in rs)
-        nodes[root] = {"id": root, "kind": "shipment", "label": _cap(rs[0][9]), "tone": "warning",
-                       "size": 1.6, "step": 1,
+    ports = sorted({r[10] for r in rows} or set(ev["hubs"]))
+    nodes, links = _cause(ev, ports, ctx, {port: len({r[8] for r in rows if r[10] == port}) for port in ports})
+    total = sum(r[6] for r in rows) or 1
+    for rank, (root, rs) in enumerate(sorted(by_root.items(), key=lambda kv: (-sum(r[6] for r in kv[1]), kv[0]))):
+        port, fee = rs[0][10], sum(r[6] for r in rs)
+        nodes[root] = {"id": root, "kind": "shipment", "label": _cap(rs[0][9]), "tone": "warning", "size": 1.6,
+                       "step": 1, "rank": rank + 1, "metric": _metric(fee, "usd", f"{_usd(fee)} in late fees"),
                        "why": [f"{_cap(rs[0][9])} ({root}).",
                                f"It was due through {ctx['hubs'].get(port, port)} while it was shut.",
                                f"{_plural(len(rs), 'order')} downstream will be late ({_usd(fee)} in fees)."]}
-        links.append({"source": port, "target": root, "tone": "danger", "label": "stuck",
+        links.append({"source": port, "target": root, "tone": "danger", "label": "stuck", "weight": fee / total,
                       "why": [f"{root} was due through {ctx['hubs'].get(port, port)} during the closure."]})
-        shown = [r for r in rs if r[0] in keep]
-        for r in shown:
-            nodes[r[0]] = {"id": r[0], "kind": "order", "label": f"{r[2]}'s order", "tone": "danger",
-                           "size": 1, "step": 1 + r[7],
+        alone = [r for r in rs if r[2] == ctx.get("persona")]
+        for r in alone:
+            nodes[r[0]] = {"id": r[0], "kind": "order", "label": f"{r[2]}'s order", "tone": "danger", "size": 1.2,
+                           "step": 2, "metric": _metric(r[6], "usd", f"{_usd(r[6])} · {_plural(r[5], 'day')} late"),
                            "why": [f"{r[2]} in {r[3]} was promised delivery on {_day(r[4])}.",
                                    f"It will now arrive {_plural(r[5], 'day')} late; the late fee is {_usd(r[6])}.",
                                    f"The delay reaches it {_plural(r[7], 'step')} along the supply chain."]}
-            links.append({"source": root, "target": r[0], "tone": "warning", "label": _plural(r[7], "step"),
-                          "why": [f"This order depends on {root} through {_plural(r[7], 'step')} of the supply chain.",
-                                  f"Each step has a little slack; what is left of the delay arrives here."]})
-        rest = len(rs) - len(shown)
+            links.append({"source": root, "target": r[0], "tone": "danger", "label": _plural(r[7], "step"),
+                          "weight": r[6] / total, "why": [f"This order depends on {root} through {_plural(r[7], 'step')}."]})
+        rest = [r for r in rs if r not in alone]
         if rest:
-            gid = f"more-{root}"
-            nodes[gid] = {"id": gid, "kind": "group", "label": f"+ {rest:,} more orders", "tone": "muted",
-                          "size": 1.2 + min(rest, 300) / 150, "step": 2,
-                          "why": [f"{rest:,} more orders depend on {root} and will also be late.",
-                                  "They are grouped to keep the picture readable; the list has them all."]}
-            links.append({"source": root, "target": gid, "tone": "muted", "why": [f"{rest:,} more late orders."]})
-    return {"nodes": list(nodes.values()), "links": links, "truncated": len(keep) < len(rows)}
+            gid, gfee = f"orders-{root}", sum(r[6] for r in rest)
+            worst = max(r[5] for r in rest)
+            nodes[gid] = {"id": gid, "kind": "group", "label": f"{_plural(len(rest), 'late order')}", "tone": "danger",
+                          "size": 1 + min(len(rest), 300) / 150, "step": 2, "count": len(rest),
+                          "metric": _metric(gfee, "usd", f"{_usd(gfee)} · up to {_plural(worst, 'day')} late"),
+                          "why": [f"{_plural(len(rest), 'order')} wait on {root} and will be late.",
+                                  f"{_usd(gfee)} in late fees; the worst is {_plural(worst, 'day')} late.",
+                                  "The list below the answer has every one of them."]}
+            links.append({"source": root, "target": gid, "tone": "warning", "label": f"{len(rest):,} orders",
+                          "weight": gfee / total, "why": [f"These orders all depend on {root}."]})
+    return {"nodes": list(nodes.values()), "links": links, "truncated": False}
+
+
+# =============================================================================================
+# 1b. top_loss_orders: the N late orders with the biggest late fees (N is a validated slot, 1-50)
+# =============================================================================================
+# The same cascade as at_risk, then ranked by late fee. Ties are broken by promise id in both
+# engines, so FalkorDB and Postgres return the same N rows.
+TOP_N_MAX = 50
+TOP_LOSS_CYPHER = AT_RISK_CYPHER[:AT_RISK_CYPHER.index("RETURN pr.id")] + """\
+RETURN pr.id AS promise, o.id AS ord, c.name AS customer, c.city AS city, pr.due_date AS due, late,
+       late * pr.penalty_per_day AS fee, steps, root[0] AS root, root[2] AS root_what, root[1] AS port
+ORDER BY fee DESC, promise ASC
+LIMIT $n
+"""
+TOP_LOSS_SQL = AT_RISK_SQL.rstrip() + """
+ORDER BY fee DESC, p.id COLLATE "C" ASC
+LIMIT %(n)s
+"""
+TOP_LOSS_COLS = AT_RISK_COLS
+
+
+def top_n(n) -> int:
+    n = int(n)
+    if not 1 <= n <= TOP_N_MAX:
+        raise ValueError(f"n must be between 1 and {TOP_N_MAX}")
+    return n
+
+
+def top_loss_falkor(g, p):
+    text = TOP_LOSS_CYPHER.format(depth=int(p["depth"]))
+    params = {"event": p["event"], "city": None, "n": top_n(p["n"])}
+    res, ms = _timed(lambda: g.query(text, params).result_set)
+    return Run(_sort_at_risk(_norm(res)), text, params, ms)
+
+
+def top_loss_pg(conn, p):
+    params = {"event": p["event"], "city": None, "depth": int(p["depth"]), "n": top_n(p["n"])}
+    res, ms = _timed(lambda: conn.execute(TOP_LOSS_SQL, params).fetchall())
+    return Run(_sort_at_risk(_norm(res)), TOP_LOSS_SQL, params, ms)
+
+
+def top_loss_answer(rows, p, ctx):
+    ev = ctx["events"][p["event"]]
+    if not rows:
+        return f"No orders are late because {ev['short']}."
+    w = rows[0]
+    return (f"The {_plural(len(rows), 'costliest late order')} add up to {_usd(sum(r[6] for r in rows))} in late fees. "
+            f"The worst is {w[2]}'s order in {w[3]}: {_plural(w[5], 'day')} late, a {_usd(w[6])} fee.")
+
+
+def top_loss_graph(rows, p, ctx):
+    """Disruption -> closed ports -> the shipments behind these orders -> the orders, ranked and sized
+    by late fee (#1 is the costliest)."""
+    ev = ctx["events"][p["event"]]
+    ports = sorted({r[10] for r in rows} or set(ev["hubs"]))
+    nodes, links = _cause(ev, ports, ctx)
+    top = rows[0][6] if rows else 1
+    total = sum(r[6] for r in rows) or 1
+    for r in rows:
+        root = r[8]
+        if root not in nodes:
+            rs = [x for x in rows if x[8] == root]
+            fee = sum(x[6] for x in rs)
+            nodes[root] = {"id": root, "kind": "shipment", "label": _cap(r[9]), "tone": "warning", "size": 1.4, "step": 1,
+                           "metric": _metric(fee, "usd", f"holds up {len(rs)} of these {'order' if len(rs) == 1 else 'orders'}"),
+                           "why": [f"{_cap(r[9])} ({root}).", f"It was due through {ctx['hubs'].get(r[10], r[10])} while it was shut."]}
+            links.append({"source": r[10], "target": root, "tone": "danger", "label": "stuck", "weight": fee / total,
+                          "why": [f"{root} was due through {ctx['hubs'].get(r[10], r[10])} during the closure."]})
+    for rank, r in enumerate(rows):
+        nodes[r[0]] = {"id": r[0], "kind": "order", "label": f"{r[2]}'s order", "tone": "danger",
+                       "size": 1 + r[6] / top * 2, "step": 2, "rank": rank + 1,
+                       "metric": _metric(r[6], "usd", f"{_usd(r[6])} · {_plural(r[5], 'day')} late · {r[3]}"),
+                       "why": [f"{r[2]} in {r[3]} was promised delivery on {_day(r[4])}.",
+                               f"It will arrive {_plural(r[5], 'day')} late; the late fee is {_usd(r[6])}.",
+                               f"The delay reaches it {_plural(r[7], 'step')} along the supply chain from {r[8]}."]}
+        links.append({"source": r[8], "target": r[0], "tone": "danger", "label": _plural(r[7], "step"),
+                      "weight": r[6] / top, "why": [f"This order depends on {r[8]} through {_plural(r[7], 'step')}."]})
+    return {"nodes": list(nodes.values()), "links": links, "truncated": False}
 
 
 # =============================================================================================
@@ -262,23 +355,36 @@ def window_answer(rows, p, ctx):
 
 
 def window_graph(rows, p, ctx):
+    """Warehouse -> orders it ships, grouped into on time / running late (with counts and value) -> the city."""
     city = f"city-{p['city']}"
-    nodes = {city: {"id": city, "kind": "place", "label": p["city"], "tone": "neutral", "size": 3,
+    total = sum(r[3] for r in rows) or 1
+    nodes = {city: {"id": city, "kind": "place", "label": p["city"], "tone": "neutral", "size": 3, "step": 2,
+                    "metric": _metric(len(rows), "orders", f"{_plural(len(rows), 'order')} due"),
                     "why": [f"Customers in {p['city']}.", f"{_plural(len(rows), 'order')} due {_day(p['from_day'])} to {_day(p['to_day'])}."]}}
     links = []
-    for r in rows[:GRAPH_CAP]:
-        wid = f"wh-{r[5]}"
-        if wid not in nodes:
-            n = sum(1 for x in rows if x[5] == r[5])
-            nodes[wid] = {"id": wid, "kind": "warehouse", "label": r[5], "tone": "neutral", "size": 2,
-                          "why": [f"{r[5]} ships these orders.", f"{_plural(n, 'order')} in this list leave from here."]}
-        nodes[r[0]] = {"id": r[0], "kind": "order", "label": f"{r[1]}'s order",
-                       "tone": "good" if r[6] <= _due_day(r[2]) else "warning", "size": 1,
-                       "why": [f"{r[1]} ordered goods worth {_usd(r[3])}.",
-                               f"Promised for {_day(r[2])}; planned to arrive {_day(r[6])}."]}
-        links.append({"source": wid, "target": r[0], "tone": "muted", "why": [f"Ships from {r[5]}."]})
-        links.append({"source": r[0], "target": city, "tone": "muted", "why": [f"Delivered to {r[1]} in {p['city']}."]})
-    return {"nodes": list(nodes.values()), "links": links, "truncated": len(rows) > GRAPH_CAP}
+    groups: dict[tuple[str, bool], list] = {}
+    for r in rows:
+        groups.setdefault((r[5], r[6] <= _due_day(r[2])), []).append(r)
+    for wh in sorted({r[5] for r in rows}):
+        wid = f"wh-{wh}"
+        n = sum(1 for x in rows if x[5] == wh)
+        nodes[wid] = {"id": wid, "kind": "warehouse", "label": wh, "tone": "neutral", "size": 2, "step": 0,
+                      "metric": _metric(n, "orders", f"{_plural(n, 'order')} leave here"),
+                      "why": [f"{wh} ships these orders.", f"{_plural(n, 'order')} in this list leave from here."]}
+    for (wh, on_time), rs in sorted(groups.items(), key=lambda kv: (kv[0][0], not kv[0][1])):
+        gid = f"{'ok' if on_time else 'late'}-{wh}"
+        value = sum(r[3] for r in rs)
+        state = "on time" if on_time else "running late"
+        nodes[gid] = {"id": gid, "kind": "group", "label": f"{_plural(len(rs), 'order')} {state}",
+                      "tone": "good" if on_time else "warning", "size": 1 + min(len(rs), 100) / 50, "step": 1,
+                      "count": len(rs), "metric": _metric(value, "usd", f"{_usd(value)} of goods"),
+                      "why": [f"{_plural(len(rs), 'order')} from {wh} {'arrive by' if on_time else 'are planned after'} their promised date.",
+                              f"Goods worth {_usd(value)}.", "The list below the answer has every one of them."]}
+        links.append({"source": f"wh-{wh}", "target": gid, "tone": "muted", "weight": value / total,
+                      "why": [f"Ships from {wh}."]})
+        links.append({"source": gid, "target": city, "tone": "good" if on_time else "warning", "weight": value / total,
+                      "why": [f"Delivered to customers in {p['city']}."]})
+    return {"nodes": list(nodes.values()), "links": links, "truncated": False}
 
 
 def _due_day(iso: str) -> int:
@@ -397,7 +503,7 @@ def why_pg(conn, p):
 def why_answer(rows, p, ctx):
     ev = ctx["events"][p["event"]]
     if not rows:
-        return f"{p['customer']} has no orders hurt by {ev['short']}."
+        return f"{p['customer']} has no orders late because {ev['short']}."
     first, last = rows[0], rows[-1]
     port = ctx["hubs"].get(first[11], first[11])
     return (f"{p['customer']}'s order arrives {_plural(last[9], 'day')} late because {first[2]} got stuck at {port}; "
@@ -410,14 +516,9 @@ def why_graph(rows, p, ctx):
         return {"nodes": [], "links": [], "truncated": False}
     port = rows[0][11]
     port_name = ctx["hubs"].get(port, port)
-    nodes = [
-        {"id": ev["id"], "kind": "event", "label": ev["name"], "tone": "danger", "size": 2, "step": 0,
-         "why": [ev["name"] + ".", f"Closed {ev['when']}, then {ev['backlog']} more days of backlog."]},
-        {"id": port, "kind": "port", "label": port_name, "tone": "danger", "size": 3, "step": 0,
-         "why": [f"{port_name} is shut.", "Anything due through it waits until it reopens."]},
-    ]
-    links = [{"source": ev["id"], "target": port, "tone": "danger", "label": "shut",
-              "why": [f"{ev['name']} closes {port_name}."]}]
+    cause, links = _cause(ev, [port], ctx)
+    nodes = list(cause.values())
+    worst = max(r[4] for r in rows) or 1
     prev = port
     for i, r in enumerate(rows):
         late_here, slack = r[4], r[5]
@@ -432,17 +533,19 @@ def why_graph(rows, p, ctx):
             link_why = [f"{r[1]} waits for {rows[i - 1][1]}.",
                         "No slack in between." if not slack else f"{_plural(slack, 'day')} of slack in between."]
         nodes.append({"id": r[1], "kind": "shipment", "label": _cap(r[2]),
-                      "tone": "danger" if late_here >= 4 else "warning", "size": 1.4, "step": i + 1, "why": why})
-        links.append({"source": prev, "target": r[1], "tone": "warning",
+                      "tone": "danger" if late_here >= 4 else "warning", "size": 1.4, "step": i + 1, "rank": i + 1,
+                      "metric": _metric(late_here, "days", f"{_plural(late_here, 'day')} late here"), "why": why})
+        links.append({"source": prev, "target": r[1], "tone": "warning", "weight": late_here / worst,
                       "label": f"+{late_here}d", "why": link_why})
         prev = r[1]
     last = rows[-1]
     oid = last[6]
     nodes.append({"id": oid, "kind": "order", "label": f"{p['customer']}'s order", "tone": "danger", "size": 1.6,
-                  "step": len(rows) + 1,
+                  "step": len(rows) + 1, "rank": len(rows) + 1,
+                  "metric": _metric(last[10], "usd", f"{_plural(last[9], 'day')} late · {_usd(last[10])} fee"),
                   "why": [f"{p['customer']} in {last[7]} was promised delivery on {_day(last[8])}.",
                           f"It will arrive {_plural(last[9], 'day')} late; the late fee is {_usd(last[10])}."]})
-    links.append({"source": prev, "target": oid, "tone": "danger", "label": "late",
+    links.append({"source": prev, "target": oid, "tone": "danger", "label": "late", "weight": last[9] / worst,
                   "why": [f"This parcel carries {p['customer']}'s order."]})
     return {"nodes": nodes, "links": links, "truncated": False}
 
@@ -490,7 +593,7 @@ RESCUE_COLS = ["rescue", "what", "late_orders", "late_fees", "shipments_affected
 def rescue_answer(rows, p, ctx):
     ev = ctx["events"][p["event"]]
     if not rows:
-        return f"Nothing to rescue: no orders are hurt by {ev['short']}."
+        return f"Nothing to rescue: no orders are late because {ev['short']}."
     top = rows[0]
     total = sum(r[2] for r in rows)
     n_roots = sum(len(r[0].split(", ")) for r in rows)
@@ -499,27 +602,28 @@ def rescue_answer(rows, p, ctx):
 
 
 def rescue_graph(rows, p, ctx):
+    """Disruption -> closed ports -> the shipments where each group's delay starts -> the group of late
+    orders it holds up, ranked by late fees (rescue #1 first)."""
     ev = ctx["events"][p["event"]]
-    nodes = {ev["id"]: {"id": ev["id"], "kind": "event", "label": ev["name"], "tone": "danger", "size": 2,
-                        "why": [ev["name"] + ".", f"Closed {ev['when']}."]}}
-    links = []
-    for h in ev["hubs"]:
-        nodes[h] = {"id": h, "kind": "port", "label": ctx["hubs"].get(h, h), "tone": "danger", "size": 3,
-                    "why": [f"{ctx['hubs'].get(h, h)} is shut.", "Every group below starts with a shipment stuck here."]}
-        links.append({"source": ev["id"], "target": h, "tone": "danger", "why": ["The disruption closes this port."]})
+    one_port = len(ev["hubs"]) == 1
+    nodes, links = _cause(ev, ev["hubs"], ctx)
+    total = sum(r[3] for r in rows) or 1
     for i, r in enumerate(rows):
         gid = f"group-{i + 1}"
-        nodes[gid] = {"id": gid, "kind": "group", "label": f"{r[2]:,} late orders", "tone": "danger" if i == 0 else "warning",
-                      "size": 1 + r[2] / max(1, rows[0][2]) * 2.5,
+        nodes[gid] = {"id": gid, "kind": "group", "label": f"Rescue #{i + 1}: {_plural(r[2], 'late order')}",
+                      "tone": "danger" if i == 0 else "warning", "size": 1 + r[3] / max(1, rows[0][3]) * 2.5,
+                      "step": 2, "rank": i + 1, "count": r[2], "metric": _metric(r[3], "usd", f"{_usd(r[3])} in late fees"),
                       "why": [f"{_plural(r[2], 'order')} late, {_usd(r[3])} in late fees.",
                               f"They all wait on: {r[1]}.", "Rescue that and the whole group is back on time."]}
         for root, what in zip(r[0].split(", "), r[1].split(" / ")):
             nodes[root] = {"id": root, "kind": "shipment", "label": _cap(what), "tone": "warning", "size": 1.4,
+                           "step": 1, "rank": i + 1,
                            "why": [f"{_cap(what)} ({root}).", "Stuck at the closed port.",
                                    f"{_plural(r[2], 'order')} wait on it."]}
-            links.append({"source": ev["hubs"][0], "target": root, "tone": "danger", "why": [f"{root} is stuck at the port."]})
+            links.append({"source": ev["hubs"][0] if one_port else ev["id"], "target": root, "tone": "danger",
+                          "weight": r[3] / total, "why": [f"{root} is stuck at {'the port' if one_port else 'a closed port'}."]})
             links.append({"source": root, "target": gid, "tone": "warning", "label": f"{r[2]:,} orders",
-                          "why": [f"These {r[2]:,} orders all depend on {root}."]})
+                          "weight": r[3] / total, "why": [f"These {r[2]:,} orders all depend on {root}."]})
     return {"nodes": list(nodes.values()), "links": links, "truncated": False}
 
 
@@ -567,12 +671,16 @@ def weak_answer(rows, p, ctx):
 def weak_graph(rows, p, ctx, extra):
     kinds = {"port": "port", "airport": "airport", "dc_national": "warehouse", "dc_regional": "warehouse"}
     nodes = [{"id": h, "kind": kinds.get(k, "place"), "label": n, "tone": "danger" if i == 0 else "warning" if i < 3 else "neutral",
-              "size": 1 + s / rows[0][3] * 3,
+              "size": 1 + s / rows[0][3] * 3, "rank": i + 1,
+              "metric": _metric(s, "score", f"{s:,.0f} shortest routes pass through"),
               "why": [f"About {s:,.0f} of the shortest routes between our places pass through {n}.",
                       "If it closes, all of those routes have to find another way."]}
              for i, (h, n, k, s) in enumerate(rows)]
     mode_word = {"ocean": "by sea", "air": "by air", "rail": "by rail", "truck": "by road", "parcel": "by van"}
+    score = {h: s for h, _n, _k, s in rows}
+    top = rows[0][3] or 1
     links = [{"source": a, "target": b, "tone": "muted", "label": f"{mode_word.get(m, m)}, {_plural(d, 'day')}",
+              "weight": min(score.get(a, 0), score.get(b, 0)) / top,
               "why": [f"A {mode_word.get(m, m)[3:]} route, {_plural(d, 'day')}."]}
              for a, b, m, d in extra.get("lanes", [])]
     return {"nodes": nodes, "links": links, "truncated": False}
@@ -614,25 +722,46 @@ def reroute_answer(rows, p, ctx):
 
 
 def reroute_graph(rows, p, ctx):
-    nodes, links = {}, []
-    x = p["avoid_hub"]
-    nodes[x] = {"id": x, "kind": "port", "label": ctx["hubs"][x], "tone": "danger", "size": 2.5,
-                "why": [f"{ctx['hubs'][x]} is avoided.", "None of these routes pass through it."]}
+    """Origin -> destination, one lane per alternative (fastest and cheapest named), and the closed
+    place drawn as blocked on the way it would normally go."""
+    src, dst, x = p["from_hub"], p["to_hub"], p["avoid_hub"]
+    name = lambda h: ctx["hubs"].get(h, h)  # noqa: E731
+    kind = lambda h: ctx["kinds"].get(h, "place")  # noqa: E731
+    nodes = {
+        src: {"id": src, "kind": kind(src), "label": name(src), "tone": "good", "size": 2.2, "step": 0,
+              "why": [name(src) + ".", "Start of every route."]},
+        x: {"id": x, "kind": kind(x), "label": name(x), "tone": "danger", "size": 2.5, "step": 1, "blocked": True,
+            "why": [f"{name(x)} is closed.", "None of the routes shown pass through it."]},
+        dst: {"id": dst, "kind": kind(dst), "label": name(dst), "tone": "good", "size": 2.2, "step": 9,
+              "why": [name(dst) + ".", "Where the goods need to go."]},
+    }
+    links = [{"source": src, "target": x, "tone": "danger", "label": "closed", "blocked": True, "weight": 0.2,
+              "why": [f"Going through {name(x)} is not possible while it is closed."]},
+             {"source": x, "target": dst, "tone": "danger", "label": "closed", "blocked": True, "weight": 0.2,
+              "why": [f"Going through {name(x)} is not possible while it is closed."]}]
+    if not rows:
+        return {"nodes": list(nodes.values()), "links": links, "truncated": False}
+    cheapest = min(range(len(rows)), key=lambda i: (rows[i][3], i))
     for rank, r in enumerate(rows):
         hubs, modes = r[0].split(" > "), r[1].split(" > ")
-        for i, h in enumerate(hubs):
-            if h not in nodes:
-                ends = h in (p["from_hub"], p["to_hub"])
-                nodes[h] = {"id": h, "kind": ctx["kinds"].get(h, "place"), "label": ctx["hubs"].get(h, h),
-                            "tone": "good" if ends else "neutral", "size": 2.2 if ends else 1.4,
-                            "why": [ctx["hubs"].get(h, h) + ".",
-                                    "Start of the route." if h == p["from_hub"] else
-                                    "Destination." if h == p["to_hub"] else "A stop on an alternative route."]}
-            if i:
-                links.append({"source": hubs[i - 1], "target": h, "tone": "good" if rank == 0 else "muted",
-                              "label": f"by {MODE.get(modes[i - 1], modes[i - 1])}",
-                              "why": [f"Option {rank + 1}: {_plural(r[2], 'day')} door to door, ${r[3]} per kg.",
-                                      f"This leg goes by {MODE.get(modes[i - 1], modes[i - 1])}."]})
+        tag = ("Fastest and cheapest" if rank == 0 == cheapest else "Fastest" if rank == 0
+               else "Cheapest" if rank == cheapest else f"Option {rank + 1}")
+        best = rank in (0, cheapest)
+        info = f"{tag} · {_plural(r[2], 'day')} · ${r[3]}/kg"
+        prev = src
+        for i, h in enumerate(hubs[1:-1]):
+            nid = f"{h}@{rank + 1}"
+            nodes[nid] = {"id": nid, "kind": kind(h), "label": name(h), "tone": "good" if best else "neutral",
+                          "size": 1.4, "step": i + 1, "rank": rank + 1,
+                          **({"metric": _metric(r[2], "days", info)} if i == 0 else {}),
+                          "why": [f"{name(h)}: a stop on {tag.lower()} ({_plural(r[2], 'day')} door to door, ${r[3]} per kg)."]}
+            links.append({"source": prev, "target": nid, "tone": "good" if best else "muted", "route": rank + 1,
+                          "label": f"by {MODE.get(modes[i], modes[i])}", "weight": 1 if rank == 0 else 0.55,
+                          "why": [f"{tag}: this leg goes by {MODE.get(modes[i], modes[i])}."]})
+            prev = nid
+        links.append({"source": prev, "target": dst, "tone": "good" if best else "muted", "route": rank + 1,
+                      "label": f"by {MODE.get(modes[-1], modes[-1])}" if len(hubs) > 2 else info,
+                      "weight": 1 if rank == 0 else 0.55, "why": [f"{info}."]})
     return {"nodes": list(nodes.values()), "links": links, "truncated": False}
 
 
@@ -652,6 +781,8 @@ class Template:
 TEMPLATES = {
     "at_risk": Template("at_risk", "Orders at risk", AT_RISK_COLS, at_risk_falkor, at_risk_pg, at_risk_answer,
                         at_risk_graph, ("event", "city?", "depth")),
+    "top_loss_orders": Template("top_loss_orders", "Costliest late orders", TOP_LOSS_COLS, top_loss_falkor, top_loss_pg,
+                                top_loss_answer, top_loss_graph, ("event", "n", "depth")),
     "orders_window": Template("orders_window", "Orders due in a date range", WINDOW_COLS, window_falkor, window_pg,
                               window_answer, window_graph, ("city", "from_day", "to_day")),
     "why_late": Template("why_late", "Why an order is late", WHY_COLS, why_falkor, why_pg, why_answer, why_graph,

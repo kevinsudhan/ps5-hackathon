@@ -10,17 +10,18 @@ deployment is one process on one origin (see the Dockerfile).
 """
 from __future__ import annotations
 
+import json
 import os
 import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import agents, memory, nl, questions, story, views
+from . import agents, influence, memory, nl, questions, story, views
 from . import falkor_store as fs
 from . import pg_store as ps
 from .config import graph_name, to_date
@@ -33,6 +34,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allo
 class RunCreate(BaseModel):
     event_id: str
     requested_by: str = Field(min_length=1, max_length=80)
+    live: bool = False          # return at once and stream progress (GET /runs/{id}/stream)
+    use_memory: bool = True     # False = comparison run: no recall, options at face value, not approvable
 
 
 class Actor(BaseModel):
@@ -149,12 +152,62 @@ def race(tenant: str, event_id: str, depth: int = Query(8, ge=0, le=12)):
 # ---- agents ---------------------------------------------------------------------------------
 @app.post("/api/{tenant}/runs")
 def create_run(tenant: str, body: RunCreate):
+    """Runs the agents and returns the finished run. With `live: true` it returns at once (status
+    'running'); follow the agents on GET /runs/{id}/stream."""
     g = _graph(tenant)
     _event_exists(g, body.event_id)
     if not g.query("MATCH (a:Agent) RETURN count(a)").result_set[0][0]:
         raise HTTPException(409, f"tenant {tenant!r} has no agent memory; load it without --no-memory")
-    run_id = agents.start_run(g, body.event_id, body.requested_by.strip())
+    if body.live:
+        run_id = agents.launch_run(g, body.event_id, body.requested_by.strip(), use_memory=body.use_memory)
+    else:
+        run_id = agents.start_run(g, body.event_id, body.requested_by.strip(), use_memory=body.use_memory)
     return memory.get_run(g, run_id)
+
+
+def _run_or_404(g, run_id: str) -> dict:
+    run = memory.get_run(g, run_id)
+    if run is None:
+        raise HTTPException(404, f"unknown run {run_id!r}")
+    return run
+
+
+@app.get("/api/{tenant}/runs/{run_id}/stream")
+def stream_run(tenant: str, run_id: str):
+    """Server-sent events: one per agent step as it starts and finishes, each carrying the run as it
+    stands in the graph, then `end`. A run with no live feed gets one `end` event with its state."""
+    g = _graph(tenant)
+    _run_or_404(g, run_id)  # also keeps tenants apart: a run id from another tenant is a 404 here
+
+    def events():
+        ended = False
+        for ev in agents.follow(run_id):
+            ended = ev["type"] == "end"
+            yield f"event: {ev['type']}\ndata: {json.dumps({**ev, 'run': memory.get_run(g, run_id)})}\n\n"
+        if not ended:
+            run = memory.get_run(g, run_id)
+            yield f"event: end\ndata: {json.dumps({'type': 'end', 'status': run['status'], 'run': run})}\n\n"
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.post("/api/{tenant}/runs/{run_id}/without-memory")
+def without_memory(tenant: str, run_id: str):
+    """Run the same analysis again with memory switched off (once; reused after) and compare."""
+    g = _graph(tenant)
+    _run_or_404(g, run_id)
+    try:
+        twin = agents.counterfactual(g, run_id)
+        return influence.compare(g, run_id, twin)
+    except agents.StateError as ex:
+        raise HTTPException(409, str(ex))
+
+
+@app.get("/api/{tenant}/runs/{run_id}/memory-influence")
+def memory_influence(tenant: str, run_id: str):
+    g = _graph(tenant)
+    _run_or_404(g, run_id)
+    return influence.influence(g, run_id)
 
 
 @app.get("/api/{tenant}/runs")
@@ -231,9 +284,10 @@ def _interpret(g, question: str, tenant: str):
 
 
 @app.get("/api/{tenant}/chips")
-def chips(tenant: str):
+def chips(tenant: str, event_id: str | None = None):
+    """Suggestions for this company; with event_id, about that disruption (default: Singapore)."""
     g = _graph(tenant)
-    return story.chips(g, questions.context(g))
+    return story.chips(g, questions.context(g), event_id)
 
 
 @app.post("/api/{tenant}/ask")

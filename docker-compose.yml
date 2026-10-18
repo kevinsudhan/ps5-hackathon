@@ -13,6 +13,7 @@ services:
       - "127.0.0.1:3300:3000"   # FalkorDB Browser (live graph view) -> http://localhost:3300
     volumes:
       - falkor-data:/var/lib/falkordb/data
+    restart: unless-stopped   # this build can panic on some query shapes; come straight back up
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 3s
@@ -32,6 +33,7 @@ services:
       # Own volume: this image is Postgres 16.9 on Debian 11, the old postgres:16 volume was
       # initialised by 16.15 on Debian 13 (different glibc collations). Data is regenerated anyway.
       - pg-routing-data:/var/lib/postgresql/data
+    restart: unless-stopped
     healthcheck:
       # Over TCP: during first-time init the temporary server only listens on the socket.
       test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "promise", "-d", "promise"]

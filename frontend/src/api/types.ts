@@ -71,19 +71,75 @@ export interface Decision {
   prev: string | null;     // previous decision in the handoff chain
   created_at: string;      // ISO datetime
   approved_by: string | null;
+  memory?: DecisionMemory | null;   // Finance only: how past experience priced the options
+  ms?: number | null;               // how long the agent step that wrote it took
+}
+/** A plan as Finance describes it: what it rescues, for how much (all from Cypher). */
+export interface PlanDesc {
+  roots: number; by_air: number; by_sea: number;
+  cost_usd: number; saved_usd: number;          // saved_usd: at face value (the what-if cascade)
+  expected_saved_usd: number;                   // the same, scaled by the track record
+  promises_saved: number; options: [string, string][];
+}
+export interface TrackRecord {
+  id: string; action: string; uses: number; successes: number; realization: number;
+  expected_usd: number; actual_usd: number;
+  past: { run_id: string; event_id: string; event_name: string; when: string; cost_usd: number;
+          expected_usd: number; actual_usd: number; outcome: string; worked: boolean }[];
+}
+export interface DecisionMemory {
+  used: boolean; changed: boolean;
+  effects: Record<string, 'changed' | 'checked'>;
+  records: TrackRecord[]; plan: PlanDesc; without_memory: PlanDesc;
 }
 export interface Recall {
   run_id: string; event_id: string; event_name: string; when: string;
   why_similar: string;     // e.g. 'same hub' | 'one lane away from Port of Singapore' | 'same kind of disruption'
-  action: string; outcome: string; cost_usd: number; saved_usd: number;
+  action: string; outcome: string; cost_usd: number; saved_usd: number; worked?: boolean;
+  requested_by?: string | null; approved_by?: string | null;
 }
 export interface Playbook { id: string; trigger: string; action: string; uses: number; successes: number }
+export type RunStatus = 'running' | 'awaiting_approval' | 'done' | 'failed' | 'what_if';
 export interface Run {
   id: string; event_id: string;
-  status: 'running' | 'awaiting_approval' | 'done' | 'failed';
+  status: RunStatus;       // what_if = made without memory, for comparison only
   requested_by: string; created_at: string;
+  memory?: 'on' | 'off'; counterfactual_of?: string | null; counterfactual?: string | null;
   decisions: Decision[];   // in handoff order
   recall: Recall[]; playbooks: Playbook[];
+}
+/** One server-sent event from GET /runs/{id}/stream, with the run as it stands in the graph. */
+export interface RunEvent {
+  type: 'step' | 'end'; i?: number; t?: number; at?: string;
+  agent?: AgentName; phase?: 'started' | 'done' | 'failed'; ms?: number; decisions?: string[]; error?: string;
+  status?: RunStatus; run: Run;
+}
+export interface InfluenceItem {
+  playbook: Playbook; name: string; realization: number; effect: 'changed' | 'checked';
+  past: { run_id: string; event_id: string; event_name: string; when: string; outcome: string;
+          cost_usd: number; saved_usd: number; worked: boolean }[];
+  expected_usd: number | null; actual_usd: number | null;
+  learned: string; now: string; effect_text: string;
+}
+export interface MemoryInfluence {
+  run_id: string; event_id: string; used: boolean; changed: boolean; influenced: number; consulted: number;
+  headline: string; items: InfluenceItem[]; recall: Recall[]; decision: string | null;
+  plan: PlanDesc | null; without_memory: PlanDesc | null; query: string;
+}
+export interface MemorySide {
+  run_id: string; memory_used: boolean; memories_used: number; similar_disruptions: number;
+  recommendation: string; roots: number; by_air: number; by_sea: number;
+  cost_usd: number; saved_usd: number; promises_saved: number; net_usd: number;
+  expected_saved_usd: number; expected_net_usd: number; summary: string;
+}
+export interface MemoryComparison {
+  event_id: string; same_plan: boolean;
+  same_inputs: { event: boolean; impact: boolean; route_options: boolean; penalty_before: boolean; memory: boolean;
+                 only_memory_differs: boolean };
+  with_memory: MemorySide; without_memory: MemorySide;
+  impact: { avoided_loss_usd: number; headline: string; detail: string | null;
+            lesson: { action: string; realization: number; past: { event_name: string; when: string } | null } | null };
+  yardstick: string;
 }
 
 // ---- UI contract v2 (docs/ui-contract.md, Oct 16): ask, engine switch, story ----------------
@@ -100,12 +156,19 @@ export interface AskNode {
   size: number;          // 1 = normal; bigger for hubs and groups (relative)
   why: string[];         // 2-3 plain lines shown when clicked
   step?: number;         // supply-chain steps from the disruption (0 = the closed port); used by the story
+  rank?: number;         // 1 = first in a ranked answer (costliest order, rescue #1, step 1 of a chain)
+  metric?: { value: number; unit: 'usd' | 'orders' | 'days' | 'score'; label: string }   // the ranked figure, from the rows
+  count?: number;        // a group node: how many items it stands for
+  blocked?: boolean;     // a closed place drawn as blocked (reroute)
 }
 export interface AskLink {
   source: string; target: string;
   label?: string;        // e.g. "4 steps", "by sea, 13 days"
   tone: Tone;
   why: string[];         // 2-3 plain lines shown when clicked
+  weight?: number;       // 0..1, relative impact (edge thickness / glow)
+  blocked?: boolean;     // the way that is closed (drawn dashed)
+  route?: number;        // which alternative route a leg belongs to (reroute)
 }
 export interface AskGraph { nodes: AskNode[]; links: AskLink[]; truncated: boolean; note?: string }
 

@@ -116,3 +116,34 @@ Both returned silently empty results inside larger queries (a supply-chain casca
 this order late" path). Our parity test against PostgreSQL and a plain-Python reference caught the
 difference (FalkorDB 0 rows, the others 1,240 and 2). We now use the workarounds above (re-bind by
 `ID()` in a shape that plans correctly, and a `WITH` barrier). Happy to test a fix.
+
+---
+
+## C. Server panic: collect() over an unmatched OPTIONAL MATCH (found Oct 17; post as its own issue)
+
+**Run it only against a scratch FalkorDB**: the process exits, and with Docker's default settings the
+container stays down (we added `restart: unless-stopped`). Writes since the last snapshot are lost.
+
+```cypher
+CREATE (:Run {id: 'R1', status: 'x', event_id: 'E', requested_by: 'A', created_at: 'now', memory: 'on'})
+```
+
+```cypher
+MATCH (r:Run {id: $id})
+OPTIONAL MATCH (r)-[:COUNTERFACTUAL_OF]->(main:Run)
+OPTIONAL MATCH (twin:Run)-[:COUNTERFACTUAL_OF]->(r)
+RETURN r.event_id, r.status, r.requested_by, r.created_at, coalesce(r.memory, 'on'), main.id, collect(twin.id)
+```
+
+with `$id = 'R1'`. Expected one row (`... , null, []`); actual: the connection closes and the log shows
+
+```
+<module> FalkorDB panic: panicked at src/reply.rs:655:58:
+called `Option::unwrap()` on a `None` value
+   ... falkordb::reply::reply_compact
+   ... falkordb::graph_core::execute_query
+```
+
+The same query with `twin.id` instead of `collect(twin.id)` returns the expected row. Neither OPTIONAL
+MATCH alone nor `collect()` of a single unmatched OPTIONAL MATCH panics; the combination does. Not yet
+reduced further. Same image as above (graph module `60002`).

@@ -1,6 +1,6 @@
 # Handoff: Promise Graph (Graph Hacks, Track 2)
 
-**Written Oct 16, 2026, evening of day 2; updated just after midnight (Oct 17) by Shyam.** Deadline: **Oct 18, 23:59 IST**.
+**Written Oct 16, 2026, evening of day 2; updated Oct 17 and Oct 18 by Shyam.** Deadline: **Oct 18, 23:59 IST**.
 Submit by the evening, not at 23:50. Everything marked "checked" was run on Kevin's laptop on Oct 16 or on
 Shyam's on Oct 17 (fresh clone). If something was not run, it says so.
 
@@ -14,8 +14,8 @@ remember past disruptions. Postgres + pgRouting is only the benchmark baseline. 
 
 | Part | State |
 |---|---|
-| Backend (FalkorDB, agents, memory, API) | Done. 19 integration tests pass, parity script passes (checked). |
-| Frontend (2D/3D stage, prompt box, Compare, Agents, Memory, Benchmark, story) | Done. Type-checks and builds (checked). |
+| Backend (FalkorDB, agents, memory, API) | Done. 39 integration tests pass, parity and concurrency scripts pass (checked Oct 18). |
+| Frontend (query-driven answer graph 2D/3D, engine switch, agents timeline, memory, Benchmark, story) | Done. Builds with no warnings; every flow screenshot-checked on both companies and both disruptions (Oct 18). |
 | Demo rehearsal | **Passed twice in a row** through the API and once fully in the UI (checked, details below). |
 | FalkorDB bug report | Still reproduces (checked Oct 17). **Not posted.** B is already upstream (#2972, fix PR #3264): comment there. A is new: post it. Details at the top of `docs/falkordb-bug-report.md`. |
 | Deploy | **Packaged, not hosted.** `docker compose --profile app up -d --build` runs everything on :8080 and loads the data on first start (checked from empty volumes). Hosting needs a VM with Docker (or FalkorDB Cloud + any container host): someone with an account. |
@@ -50,6 +50,49 @@ npm --prefix frontend run dev             # http://localhost:5173
 The data lives in Docker volumes, so after a restart you only need `docker compose up -d`.
 `python -m scripts.load` is only needed on a fresh machine.
 
+## What changed on Oct 18: a query-driven console
+
+* **No graph until you ask.** The landing shows what happened (title, dates, four count-up figures) and a centred
+  ask box with chips. After a question: the answer sentence, then a graph of **only the entities that answer it**,
+  then "How it was found" (engine, time, the exact query with Copy, plain-English steps, Compare engines).
+  The ask box docks at the bottom.
+* **One shape per question** (backend `questions.py` `*_graph`, additive fields `rank`, `metric`, `count`, `blocked`,
+  `weight`, `route`): ranked stuck shipments for orders at risk, a numbered chain for "why late", ranked rescue
+  groups, hubs sized by score, fastest / cheapest options around a blocked hub. Max ~20 nodes; the UI folds the
+  rest into "+N more" (click to expand) and lays fan-outs out as a grid (`frontend/src/lib/answerLayout.ts`).
+* **New template `top_loss_orders`** ("the 10 most loss-inducing orders", N 1-50): the head of `at_risk`, Cypher
+  and SQL twins, parity-tested. New chip. `/chips?event_id=` names the chosen disruption in its questions.
+* **Top bar:** the Technical-details toggle is gone; an **engine switch** (FalkorDB primary / PostgreSQL) sits in
+  its place and only changes who answers questions. Benchmark and Memory open the drawer.
+* **Palette and tokens:** every colour, radius, shadow and timing lives in `frontend/src/styles/tokens.css`
+  (contrast checked to WCAG AA; tints adjusted, the six core colours untouched).
+* **Story graph:** orders are now linked to a *delayed* feeder of their last mile (three were drawn unlinked).
+* **Memory drawer "duplicates"** are real repeated demo runs of the same disruption (different requesters), not a
+  display bug; each item now says who requested and who approved it. Nothing was deleted.
+* Demo numbers unchanged (755 / $114,065 / $19,180 / $68,257 / 406; LA 1,474 / $681,534 / $220,656).
+
+## What changed on Oct 17 (afternoon): the three Track 2 features and a new console
+
+* **Memory now changes decisions, and we can prove it.** Before, Finance's "rule out air freight" memory never
+  changed a plan (air was never the best option anyway). Now each learned habit has a **track record**
+  (actual / expected saving over its past outcomes, `memory.track_record`), Finance prices options with it,
+  records whether that changed the plan (`USED_MEMORY {effect}`), and the Verifier re-reads it.
+  Seeded history now stores expected vs actual savings (`history.py`).
+* **LA / Long Beach now runs Nov 20-30** (into Thanksgiving week; was Nov 20-24), so air freight wins on paper
+  there and memory flips the plan: without memory, air-freight 5 containers for $409,441; with memory, no rescue;
+  expected loss avoided $220,656. **Singapore is unchanged** (755 / $114,065 / $19,180 / $68,257 / 406 / 13 of 13);
+  memory is checked there and says it did not change the plan. Data was reloaded (`scripts.load`).
+* **With vs without memory:** `POST /runs/{id}/without-memory` reruns the analysis with memory off (a real run,
+  `COUNTERFACTUAL_OF`, never approvable) and compares; the inputs are checked identical.
+* **Live agent timeline:** `POST /runs {live: true}` + `GET /runs/{id}/stream` (server-sent events). Each step is timed.
+* **New console UI** (dark): incident bar with the numbers, graph in the middle, the agents' response on the right
+  (timeline, approval, recommendation, memory influence, compare), technical details behind a toggle. The old
+  Agents tab is gone (the timeline replaces it); the drawer keeps Memory and Benchmark.
+* **FalkorDB bug C:** a query shape that panics the engine (server exits). Worked around; both containers now
+  `restart: unless-stopped`. Text in `docs/falkordb-bug-report.md`.
+* Recall only counts earlier disruptions (an approved LA run used to show up as "past" for Singapore).
+* 31 tests (12 new in `tests/test_memory_features.py`); parity passes; screenshots retaken.
+
 ## What changed on Oct 17 (just after midnight)
 
 * **One-command run / deploy packaging.** Root `Dockerfile` (builds the frontend, FastAPI serves it next to
@@ -83,18 +126,27 @@ The data lives in Docker volumes, so after a restart you only need `docker compo
 
 ## Demo flow and the numbers you should see (northwind, Singapore Oct 20-24)
 
-1. Open http://localhost:5173. The first answer: **755 orders late, $114,065 in late fees**, FalkorDB ~30 ms.
-2. Flip the engine switch to PostgreSQL: same sentence, slower (~40-100 ms). **Compare** shows "Same answer".
-3. Chip "Why is Aisha's order late?": a 5-step chain, **3 days late**, traced back to Port of Singapore.
-4. **Play the story** (~30 s): port closes, the delay spreads (57 shipments), 755 count-up, camera
-   flies to Aisha Rahman's order, agent lines, then the memory card (Suez, July 2026, air freight did not pay off).
-5. **Agents** tab: type your name as requester, **Run the agents**. Expect 6 cards: 12 root
-   shipments, 6 groups, Finance proposes **3 rescues by sea for $19,180, saving $68,257, 406 orders back on time**,
-   Verifier passes 13 of 13 checks.
-6. Approve as the requester: **blocked** ("You can't approve your own request").
-7. Approve as someone else: Finance shows "Approved by ...", Comms drafts a message to Aisha.
-8. **Memory** tab: Suez (did not pay off), Port Klang and Colombo (worked), and two learned habits.
-9. **Benchmark** tab: the depth sweep chart (FalkorDB flat ~30 ms, Postgres jumps at step 4).
+1. Open http://localhost:5173. What happened: **755 orders at risk, $114,065 exposure, 6 groups**; no graph yet,
+   just the ask box and chips; the right panel lists the six agents, waiting.
+   Click **Orders at risk from Singapore**: the sentence, then 5 stuck shipments ranked by late fees with their
+   order groups (Aisha's order kept), "+3 more shipments" folded, then "How it was found".
+2. **Run the agents** (requester = your name). The timeline fills step by step with real timings (~0.6-0.9 s in all):
+   12 shipments hit, 755 / $114,065 / 6 groups, 8 routes, **Reroute 3 shipments by sea for $19,180**, **13 of 13 checks**.
+   Recommendation: $19,180, $68,257 avoided, 406 orders back on time. Memory card: "checked; it did not change this decision".
+3. **Compare with and without memory**: same plan either way (honest). Then use **Switch disruption (2)** and pick
+   **LA / Long Beach labour action**: 1,474 orders, $681,534.
+4. **Run the agents** again: Finance says **No rescue: inform affected customers**, tagged "Past experience changed this
+   plan". Open the memory card: Suez (Jul 2026) → spent $96,000 expecting $148,000, avoided $41,000 → air freight delivered
+   28% → at face value air-freighting 5 shipments saves $681,534 for $409,441 → counted at 28% it saves ~$188,785, so no rescue.
+5. **Compare with and without memory**: without memory, **Air-freight 5 shipments, $409,441**; with memory, no rescue;
+   **"Using past experience avoided an expected loss of $220,656."** All five "same input" checks are green.
+6. Approve as the requester: **blocked** ("You can't approve your own request"). Approve as someone else: Comms runs.
+7. Chip "Why is Aisha's order late?" (any time): a numbered chain, **3 days late**, traced back to Port of Singapore.
+   "10 most loss-inducing orders": the 10 costliest, ranked, **$32,897** together, worst $4,692 (Atlanta).
+8. Top-bar **engine switch** to PostgreSQL: the same sentence, the answer says "Answered by PostgreSQL"; **Compare
+   engines** under any answer; **Benchmark** (FalkorDB flat ~30-50 ms, Postgres jumps at step 4); the Cypher under
+   "How it was found" and in the memory card.
+9. **Play the 30-second story** still works for either disruption.
 
 **Before recording, run `python -m scripts.reset_demo`** (from `backend/`). Every run, including the one
 the story starts, adds a run to memory and bumps the playbook counts ("Worked 6 of 6 times").
@@ -106,8 +158,8 @@ The reset puts memory back to the 3 seeded past disruptions without reloading th
   serving the old code. If a backend change does not show up, stop and start the API.
 * **Gemini often returns 503** ("high demand"). The agents fall back to template wording, and the numbers
   are identical either way. The UI re-reads the run for ~16 s in case Gemini answers late.
-* **Narrow windows:** the 2D diagram does not fit the width at ~800 px; use drag, the scroll wheel or
-  Re-centre. The Re-centre button sits partly under the story caption at that width. Record at full width.
+* **Small screens:** answers fit the stage on their own (drag, wheel zoom, Re-centre still work). Below
+  ~1180 px the right panel moves under the answer. The top-10 answer is small at 1280x800; record at 1920x1080.
 * **Git identity on this laptop is a placeholder** (`Your Name <your.email@example.com>` in the global
   config). The first commit was made with an explicit author instead. Set your own:
   `git config --global user.name "..."` and `user.email`.
@@ -126,15 +178,15 @@ The reset puts memory back to the 3 seeded past disruptions without reloading th
 
 ### Proposed video shot list (~3 minutes)
 
-1. 10 s: the one-line pitch over the first answer screen (755 orders, $114,065).
-2. 30 s: the story, full screen, uncut.
-3. 25 s: "Why is Aisha's order late?", click a card to show the "why" lines, open "How it was found" to show the Cypher.
-4. 25 s: engine switch to PostgreSQL, then Compare (same answer, both queries). Say the honest result: FalkorDB wins the
-   multi-step questions here; Postgres + pgRouting wins clusters.
-5. 40 s: Agents: run, self-approval blocked, approve as a teammate, Comms message.
-6. 20 s: Memory tab: the agents recalled Suez and avoided air freight.
-7. 15 s: Benchmark sweep chart, then the FalkorDB Browser at http://localhost:3300 with the README's Cypher query.
-8. 10 s: close on the repo URL and team names.
+1. 10 s: the pitch over the console (Singapore: 755 orders, $114,065), say what each area is.
+2. 30 s: ask "Orders at risk from Singapore", then Run the agents; let the timeline fill; read the recommendation; self-approval blocked.
+3. 45 s: switch to LA / Long Beach, analyze, open the memory card (Suez → 28% → no rescue), then Compare with and
+   without memory: $409,441 on air freight vs no rescue, **$220,656 expected loss avoided**. This is the Track 2 moment.
+4. 20 s: "Why is Aisha's order late?" (the path through the graph), click a card.
+5. 25 s: the engine switch: PostgreSQL vs FalkorDB on the same answer, How it was found, Compare engines, the benchmark. Say the honest
+   result: FalkorDB wins the multi-step questions here; Postgres + pgRouting wins clusters.
+6. 15 s: the FalkorDB Browser at http://localhost:3300: the run, its decisions, `USED_MEMORY` to the Suez playbook.
+7. 10 s: close on the repo URL and team names. (Record at 1920x1080; run `scripts.reset_demo` first.)
 
 ## Before submitting
 

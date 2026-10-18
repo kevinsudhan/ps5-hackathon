@@ -462,6 +462,85 @@ WHERE p.status = 'active' AND s.eta_day + w.delay > p.due_day
   AND (%(city)s::text IS NULL OR c.city = %(city)s::text)
 ```
 
+## P1b. Prompt box: the N costliest late orders
+
+Template `top_loss_orders` ("10 most loss-inducing orders"): the at-risk cascade ranked by late fee, ties by promise id in both engines; N is a validated slot from 1 to 50.
+
+```cypher
+MATCH (e:Event {id: $event})-[:AFFECTS]->(h:Hub)
+WITH e, h, [(h)<-[:TO]-(l:Leg) WHERE l.arrive_day >= e.start_day AND l.arrive_day <= e.end_day | [l, l.arrive_day]]
+         + [(h)<-[:FROM]-(l:Leg) WHERE l.depart_day >= e.start_day AND l.depart_day <= e.end_day | [l, l.depart_day]]
+         AS touches
+UNWIND touches AS touch
+WITH e, h, touch[0] AS l, touch[1] AS t
+MATCH (l)<-[:USES]-(s0:Shipment)
+WITH ID(s0) AS sid, max(e.end_day + e.backlog_days - t + 1) AS d0, min(h.id) AS port
+MATCH (s0) WHERE ID(s0) = sid
+MATCH p = (s0)-[:FEEDS*0..8]->(s:Shipment)
+WITH s, s0, port, length(p) AS hops,
+     reduce(d = d0, f IN relationships(p) | CASE WHEN d > f.buffer_days THEN d - f.buffer_days ELSE 0 END) AS delay
+WHERE delay > 0
+WITH s, s0, port, hops, delay ORDER BY delay DESC, hops ASC, s0.id ASC
+WITH s, max(delay) AS delay, min(hops) AS steps, collect([s0.id, port, s0.description])[0] AS root
+MATCH (s)<-[:FULFILLED_BY]-(o:Order)-[:HAS_PROMISE]->(pr:Promise {status: 'active'})
+WITH pr, o, s, delay, steps, root, s.eta_day + delay - pr.due_day AS late
+WHERE late > 0
+MATCH (c:Customer)-[:PLACED]->(o)
+WITH pr, o, c, late, steps, root WHERE $city IS NULL OR c.city = $city
+RETURN pr.id AS promise, o.id AS ord, c.name AS customer, c.city AS city, pr.due_date AS due, late,
+       late * pr.penalty_per_day AS fee, steps, root[0] AS root, root[2] AS root_what, root[1] AS port
+ORDER BY fee DESC, promise ASC
+LIMIT $n
+```
+
+Postgres baseline, prompt-box twin (same answer, checked by the benchmark):
+
+```sql
+WITH RECURSIVE
+hit AS (
+    SELECT x.shipment_id AS sid, MAX(e.end_day + e.backlog_days - x.t + 1) AS d0, MIN(x.hub) AS port
+    FROM event e
+    JOIN affects a ON a.event_id = e.id
+    CROSS JOIN LATERAL (
+        SELECT l.shipment_id, l.arrive_day AS t, a.hub_id AS hub FROM leg l
+        WHERE l.to_hub = a.hub_id AND l.arrive_day BETWEEN e.start_day AND e.end_day
+        UNION ALL
+        SELECT l.shipment_id, l.depart_day, a.hub_id FROM leg l
+        WHERE l.from_hub = a.hub_id AND l.depart_day BETWEEN e.start_day AND e.end_day
+    ) x
+    WHERE e.id = %(event)s
+    GROUP BY x.shipment_id
+),
+walk (root, port, sid, delay, hops) AS (
+    SELECT sid, port, sid, d0, 0 FROM hit
+    UNION
+    SELECT w.root, w.port, f.dst, w.delay - f.buffer_days, w.hops + 1
+    FROM walk w JOIN feeds f ON f.src = w.sid
+    WHERE w.hops < %(depth)s AND w.delay - f.buffer_days > 0
+),
+worst AS (SELECT sid, MAX(delay) AS delay, MIN(hops) AS steps FROM walk GROUP BY sid),
+best AS (
+    SELECT DISTINCT ON (sid) sid, root, port FROM walk
+    ORDER BY sid, delay DESC, hops ASC, root COLLATE "C" ASC
+)
+SELECT p.id, o.id, c.name, c.city, p.due_date,
+       s.eta_day + w.delay - p.due_day AS late,
+       (s.eta_day + w.delay - p.due_day) * p.penalty_per_day AS fee,
+       w.steps, b.root, rs.description, b.port
+FROM worst w
+JOIN best b ON b.sid = w.sid
+JOIN shipment s ON s.id = w.sid
+JOIN fulfilled_by fb ON fb.shipment_id = w.sid
+JOIN orders o ON o.id = fb.order_id
+JOIN promise p ON p.order_id = o.id
+JOIN customer c ON c.id = o.customer_id
+JOIN shipment rs ON rs.id = b.root
+WHERE p.status = 'active' AND s.eta_day + w.delay > p.due_day
+  AND (%(city)s::text IS NULL OR c.city = %(city)s::text)
+ORDER BY fee DESC, p.id COLLATE "C" ASC
+LIMIT %(n)s
+```
+
 ## P2. Prompt box: orders from one city due between two dates
 
 Template `orders_window`.
@@ -502,9 +581,9 @@ MATCH (l)<-[:USES]-(s0:Shipment)
 WITH ID(s0) AS sid, max(e.end_day + e.backlog_days - t + 1) AS d0, min(h.id) AS port
 MATCH (s0) WHERE ID(s0) = sid
 MATCH p = (s0)-[:FEEDS*0..8]->(s:Shipment)
-// Walk OUT from s and filter the customer by name. Matching from the indexed customer INTO s
-// (bound by the variable-length path) returns 0 rows on this FalkorDB build: engine bug #8.
-// The WITH barrier is needed too: without it the planner fuses the clauses and returns nothing.
+// The WITH barrier is required: without it the planner drops the `WHERE ID(s0) = sid` binding of
+// the start node (it plans from the customer side) and returns 0 rows on this FalkorDB build.
+// Engine bug B, bench/NOTES.md #8; minimal repro in scripts/repro_falkordb.py.
 WITH p, port, d0, s
 MATCH (s)<-[:FULFILLED_BY]-(o:Order)<-[:PLACED]-(c:Customer)
 WHERE c.name = $customer
@@ -588,14 +667,14 @@ Past runs about disruptions at the same hub, one lane away, or of the same kind,
 ```cypher
 MATCH (e:Event {id: $event})-[:AFFECTS]->(h:Hub)
 OPTIONAL MATCH (h)-[:LANE]-(n:Hub)
-WITH e, collect(DISTINCT h.id) AS hubs, collect(DISTINCT n.id) AS nbrs
+WITH e, collect(DISTINCT h.id) AS hubs, collect(DISTINCT h.name) AS hub_names, collect(DISTINCT n.id) AS nbrs
 MATCH (past:Event)<-[:ABOUT]-(r:Run)<-[:PART_OF]-(d:Decision {kind: 'plan'})
-WHERE past.id <> e.id AND d.status = 'approved'
+WHERE past.id <> e.id AND past.start_day < e.start_day AND d.status = 'approved'
 MATCH (past)-[:AFFECTS]->(ph:Hub)
-WITH e, hubs, nbrs, past, r, d, collect(ph.id) AS phubs
+WITH e, hubs, hub_names, nbrs, past, r, d, collect(ph.id) AS phubs
 WITH past, r, d,
      CASE WHEN any(x IN phubs WHERE x IN hubs) THEN 'same hub'
-          WHEN any(x IN phubs WHERE x IN nbrs) THEN 'one lane away from ' + hubs[0]
+          WHEN any(x IN phubs WHERE x IN nbrs) THEN 'one lane away from ' + hub_names[0]
           WHEN past.type = e.type THEN 'same kind of disruption' END AS why,
      CASE WHEN any(x IN phubs WHERE x IN hubs) THEN 0
           WHEN any(x IN phubs WHERE x IN nbrs) THEN 1 ELSE 2 END AS rank
@@ -607,12 +686,40 @@ ORDER BY rank, past.start_day DESC
 
 ## M2. Playbooks (procedural)
 
-Learned rules with use and success counts. Finance reads them: a playbook that failed before (air-freighting full containers) rules that option out today.
+Learned habits with use and success counts, for this kind of event (or any event).
 
 ```cypher
 MATCH (e:Event {id: $event})
 MATCH (p:Playbook) WHERE p.event_type = e.type OR p.event_type = 'any'
 RETURN p.id, p.trigger, p.action, p.uses, p.successes ORDER BY p.uses DESC
+```
+
+## M3. Track record of a learned habit
+
+Every past plan that followed the habit, with the saving it expected when it was approved and the saving its real outcome delivered. Finance scales today's estimate for options of the same kind by actual / expected (air freight for full containers: 28%), so memory corrects estimates instead of banning options.
+
+```cypher
+MATCH (p:Playbook) WHERE p.id IN $ids
+MATCH (p)<-[:FOLLOWED]-(d:Decision)-[:RESULTED_IN]->(o:Outcome)
+WHERE o.expected = false
+MATCH (d)-[:PART_OF]->(r:Run)-[:ABOUT]->(e:Event)
+RETURN p.id, p.action, p.uses, p.successes, d.id, d.numbers, o.cost_usd, o.saved_usd, o.summary, o.worked,
+       r.id, e.id, e.name, e.start_day
+ORDER BY e.start_day DESC
+```
+
+## M4. Memory influence on a run
+
+Which learned habits a run's plan applied (`USED_MEMORY`, effect `changed` or `checked`) and where each was learned: the past run, its event and its real outcome. Drives the Memory influence card.
+
+```cypher
+MATCH (d:Decision {run_id: $run, kind: 'plan'})-[u:USED_MEMORY]->(p:Playbook)
+OPTIONAL MATCH (p)<-[:FOLLOWED]-(pd:Decision)-[:RESULTED_IN]->(o:Outcome)
+WHERE o.expected = false
+OPTIONAL MATCH (pd)-[:PART_OF]->(r:Run)-[:ABOUT]->(e:Event)
+RETURN d.id, p.id, p.trigger, p.action, p.uses, p.successes, u.realization, u.effect,
+       pd.id, pd.numbers, o.summary, o.cost_usd, o.saved_usd, o.worked, r.id, e.id, e.name, e.start_day
+ORDER BY u.effect, p.id, e.start_day DESC
 ```
 
 ## Memory writes (shared state and handoffs)
@@ -627,6 +734,9 @@ Every agent writes through `backend/promisegraph/memory.py`:
 * `choose_options`: `(:Decision)-[:CHOOSES]->(:RouteOption)`
 * `set_decision_status`: `(:Decision)-[:APPROVED_BY|REJECTED_BY]->(:Person)`
 * `record_outcome`, `upsert_playbook`: `(:Decision)-[:RESULTED_IN]->(:Outcome)`, `(:Decision)-[:FOLLOWED]->(:Playbook)`
+* `link_memory_use`: `(:Decision)-[:USED_MEMORY {realization, effect}]->(:Playbook)`
+* `create_run(..., counterfactual_of=...)`: `(:Run {memory: 'off'})-[:COUNTERFACTUAL_OF]->(:Run)` (the run without memory)
+* `mark_step`: `Decision.ms`, how long the agent step that wrote it took (the live timeline)
 
 The next agent reads the previous agent's output from these nodes (for example the Rerouter reads
 `(:Decision {kind:'impact'})-[:FOUND]->(:Cluster)-[:ROOT]->(:Shipment)`), never from Python variables.

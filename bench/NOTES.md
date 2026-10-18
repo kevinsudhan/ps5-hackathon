@@ -139,6 +139,11 @@ is a tie; on reroutes FalkorDB wins only the hop-capped question the product ask
 9. **A read on a deleted graph re-creates it.** `GRAPH.QUERY` against a graph deleted a moment ago
    creates a new empty graph with that name. Our health check did that to the test graph. Use
    `GRAPH.RO_QUERY` (falkordb-py `ro_query`) for existence-style reads; it errors instead.
+10. **Engine bug C: one query shape kills the server (Oct 17).** Two `OPTIONAL MATCH`es where one binds
+   nothing, followed by `collect()` of the unbound side, panics the engine (`src/reply.rs:655`, `unwrap()` on
+   `None`) and the FalkorDB process exits. Writes since the last snapshot are lost. We split the query into
+   plain lookups (`memory.get_run`) and gave both containers `restart: unless-stopped`. Repro in
+   [`docs/falkordb-bug-report.md`](../docs/falkordb-bug-report.md).
 
 ## Product notes found while racing
 

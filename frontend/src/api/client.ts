@@ -6,7 +6,8 @@
 // "Not Found"); any other error is shown as an error. Fixtures only cover northwind / Singapore.
 
 import type {
-  Answer, Chip, Comparison, Decision, Engine, EventInfo, Health, Playbook, Recall, Run, Story, Sweep,
+  Answer, Chip, Cluster, Comparison, Decision, Engine, EventInfo, Health, MemoryComparison, MemoryInfluence, Playbook,
+  Recall, Run, RunEvent, Story, Sweep,
 } from './types'
 import chipsUrl from '../fixtures/chips.json?url'
 import askFkUrl from '../fixtures/ask-at_risk-falkordb.json?url'
@@ -94,8 +95,9 @@ export const getEvents = (tenant: string) => live(request<EventInfo[]>('GET', `$
 
 // ---- v2: ask, compare, sweep, chips, story --------------------------------------------------
 
-export function getChips(tenant: string) {
-  return withFallback(() => request<Chip[]>('GET', `${base(tenant)}/chips`), () => fixture<Chip[]>(chipsUrl))
+export function getChips(tenant: string, eventId?: string | null) {
+  const q = eventId ? `?event_id=${enc(eventId)}` : ''
+  return withFallback(() => request<Chip[]>('GET', `${base(tenant)}/chips${q}`), () => fixture<Chip[]>(chipsUrl))
 }
 
 export async function ask(tenant: string, question: string, engine: Engine, signal?: AbortSignal): Promise<Loaded<Answer>> {
@@ -151,8 +153,34 @@ export function getStory(tenant: string, eventId: string) {
 
 // ---- agents and memory (api-contract.md; FalkorDB only) --------------------------------------
 
-export const createRun = (tenant: string, eventId: string, requestedBy: string) =>
-  live(request<Run>('POST', `${base(tenant)}/runs`, { event_id: eventId, requested_by: requestedBy }))
+export const createRun = (tenant: string, eventId: string, requestedBy: string, opts: { live?: boolean } = {}) =>
+  live(request<Run>('POST', `${base(tenant)}/runs`, { event_id: eventId, requested_by: requestedBy, live: !!opts.live }))
+
+/**
+ * Follow a run as the agents work (server-sent events). Calls onEvent for every step that starts or
+ * finishes and once more at the end; returns a function that stops listening.
+ */
+export function streamRun(tenant: string, runId: string, onEvent: (e: RunEvent) => void, onError: (msg: string) => void) {
+  const es = new EventSource(`${base(tenant)}/runs/${enc(runId)}/stream`)
+  let ended = false
+  const handle = (ev: MessageEvent) => {
+    try {
+      const data = JSON.parse(ev.data) as RunEvent
+      if (data.type === 'end') { ended = true; es.close() }
+      onEvent(data)
+    } catch { /* ignore a malformed frame */ }
+  }
+  es.addEventListener('step', handle as EventListener)
+  es.addEventListener('end', handle as EventListener)
+  es.onerror = () => { if (!ended) { es.close(); onError('Lost the live feed from the agents.') } }
+  return () => { ended = true; es.close() }
+}
+export const getInfluence = (tenant: string, runId: string) =>
+  live(request<MemoryInfluence>('GET', `${base(tenant)}/runs/${enc(runId)}/memory-influence`))
+export const compareMemory = (tenant: string, runId: string) =>
+  live(request<MemoryComparison>('POST', `${base(tenant)}/runs/${enc(runId)}/without-memory`))
+export const getClusters = (tenant: string, eventId: string) =>
+  live(request<Cluster[]>('GET', `${base(tenant)}/events/${enc(eventId)}/clusters?depth=8`))
 export const getRun = (tenant: string, runId: string) => live(request<Run>('GET', `${base(tenant)}/runs/${enc(runId)}`))
 export const listRuns = (tenant: string) => live(request<Run[]>('GET', `${base(tenant)}/runs`))
 export const approveDecision = (tenant: string, run: Run, d: Decision, by: string) =>

@@ -89,6 +89,7 @@ export interface Recall {
   why_similar: string;     // e.g. 'same hub' | 'one lane away from Port of Singapore' | 'same kind of disruption'
   action: string; outcome: string; cost_usd: number; saved_usd: number;
   worked: boolean;         // added: false = a lesson (e.g. the Suez air-freight run)
+  requested_by?: string | null; approved_by?: string | null;   // added Oct 17 (UI pass): who asked, who signed off
 }
 export interface Playbook { id: string; trigger: string; action: string; uses: number; successes: number }
 export interface Run {
@@ -113,7 +114,10 @@ export interface Run {
 | GET | `/api/{tenant}/race/{event_id}?depth=8` | `Race` | live |
 | GET | `/api/{tenant}/events/{event_id}/subgraph?depth=8&limit=1500` | `Subgraph` | live |
 | GET | `/api/{tenant}/promises/{promise_id}/path?event_id=...` | `PromisePath` (event -> hub -> root -> ... -> promise) | live |
-| POST | `/api/{tenant}/runs` body `{event_id, requested_by}` | `Run` (agents run until `awaiting_approval`; can take ~5-20 s) | live |
+| POST | `/api/{tenant}/runs` body `{event_id, requested_by, live?, use_memory?}` | `Run` (agents run until `awaiting_approval`, ~0.5-1 s). `live: true` returns at once with status `running`; `use_memory: false` makes a comparison run that ends as `what_if` and cannot be approved | live |
+| GET | `/api/{tenant}/runs/{run_id}/stream` | Server-sent events: `step` (agent, phase `started`/`done`/`failed`, `ms`, decision ids) and `end` (status), each with the run as it stands in the graph | live (Oct 17) |
+| POST | `/api/{tenant}/runs/{run_id}/without-memory` | `MemoryComparison`: reruns the same analysis with memory switched off (once; reused after) and compares; checks the inputs are identical | live (Oct 17) |
+| GET | `/api/{tenant}/runs/{run_id}/memory-influence` | `MemoryInfluence`: which learned habits the plan applied, where each was learned, and whether it changed the plan | live (Oct 17) |
 | GET | `/api/{tenant}/runs` | `Run[]` (newest first, decisions included) | live |
 | GET | `/api/{tenant}/runs/{run_id}` | `Run` | live |
 | POST | `/api/{tenant}/runs/{run_id}/decisions/{decision_id}/approve` body `{by}` | `Run` | live |
@@ -127,6 +131,18 @@ Notes from implementation:
 * `POST /runs` returns in ~0.2-3 s. Gemini rewrites explanations in the background over ~5-10 s:
   poll `GET /runs/{id}` for a few seconds after creating or approving a run.
 * Approving runs the Comms agent; its `explanation` is a drafted customer message.
+
+New on Oct 17 (additive; nothing above changed): `Run` has `memory` ('on' | 'off'), `counterfactual_of` and
+`counterfactual`; `Decision` has `ms` (the agent step's duration) and, on Finance's plan, `memory`
+(`used`, `changed`, `effects` per playbook, `records` = track records, `plan` and `without_memory`
+descriptions); the plan's `numbers` add `expected_saved_usd`. Types: `frontend/src/api/types.ts`.
+
+New on Oct 17, UI pass (additive; nothing above changed): `Recall` items carry `requested_by` and
+`approved_by`, so the Memory drawer can tell repeated demo runs of the same disruption apart. The
+ask/answer endpoints (`/chips`, `/ask`, `/compare`, `/sweep`, `/story`) are specified in
+[`ui-contract.md`](ui-contract.md): `/chips` takes an optional `event_id`, answer graphs carry
+ranking fields (`rank`, `metric`, `count`, `blocked` on nodes; `weight`, `blocked`, `route` on links),
+and there is a new template, `top_loss_orders`.
 
 Errors: FastAPI style `{"detail": "..."}`. Approve returns **403** when `by` equals the run's
 `requested_by` (policy gate: you cannot approve your own request) and **409** when the decision is

@@ -135,6 +135,19 @@ def _has(q: str, *words: str) -> bool:
     return any(re.search(rf"\b{w}", q) for w in words)
 
 
+NUM_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+             "ten": 10, "eleven": 11, "twelve": 12, "fifteen": 15, "twenty": 20, "thirty": 30, "forty": 40,
+             "fifty": 50, "dozen": 12}
+
+
+def top_count(q: str, default: int = 10) -> int:
+    """How many orders a ranked question asks for: a number or a number word, bounded to 1..TOP_N_MAX."""
+    from .questions import TOP_N_MAX
+    m = re.search(r"\b(\d{1,3})\b", q)
+    n = int(m.group(1)) if m else next((v for w, v in NUM_WORDS.items() if re.search(rf"\b{w}\b", q)), default)
+    return max(1, min(TOP_N_MAX, n))
+
+
 def keywords(question: str, v: Vocabulary) -> tuple[str, dict] | None:
     q = question.lower().replace("’", "'")
     event = v.event(q)
@@ -154,6 +167,11 @@ def keywords(question: str, v: Vocabulary) -> tuple[str, dict] | None:
         cust = v.customer(m.group(1))
         if cust:
             return "why_late", {"customer": cust, "event": event or v.default_event(), "depth": DEFAULT_DEPTH}
+
+    # top_loss_orders: "10 most loss-inducing orders", "top 5 costliest late orders"
+    if _has(q, "order") and _has(q, "loss", "losing", "lose", "costl", "expensive", "penalt", "late fee", "fees", "money") \
+            and (_has(q, "top", "most", "biggest", "largest", "worst", "highest", "priciest") or re.search(r"\b\d{1,3}\b", q)):
+        return "top_loss_orders", {"event": event or v.default_event(), "n": top_count(q), "depth": DEFAULT_DEPTH}
 
     if _has(q, "rescue", "fix first", "save first", "prioriti", "start with", "which shipments should"):
         return "rescue_first", {"event": event or v.default_event(), "depth": DEFAULT_DEPTH}
@@ -179,6 +197,7 @@ Return JSON only. Use null for slots you cannot fill. Never invent values: use t
 
 Templates:
 - at_risk: which orders will be late because of a disruption (slots: event, optional city)
+- top_loss_orders: the N late orders with the biggest late fees / losses (slots: event, n = a whole number 1-50)
 - orders_window: orders from customers in one city, promised between two dates (slots: city, from_date, to_date)
 - why_late: why one named customer's order is late (slots: customer, event)
 - rescue_first: which stuck shipments to rescue first (slots: event)
@@ -201,7 +220,7 @@ def gemini(question: str, v: Vocabulary) -> tuple[str, dict] | None:
     schema = {"type": "object", "properties": {
         "template": {"type": "string", "enum": list(TEMPLATES) + ["none"]},
         **{k: {"type": "string", "nullable": True} for k in
-           ("event", "city", "customer", "from_date", "to_date", "from_place", "to_place", "avoid_place")}},
+           ("event", "city", "customer", "from_date", "to_date", "from_place", "to_place", "avoid_place", "n")}},
         "required": ["template"]}
     try:
         client = llm._get_client()
@@ -221,6 +240,12 @@ def gemini(question: str, v: Vocabulary) -> tuple[str, dict] | None:
     ev = out.get("event") if out.get("event") in v.events else (v.event(question) or v.default_event())
     if t == "at_risk":
         return t, {"event": ev, "city": v.city(out.get("city")), "depth": DEFAULT_DEPTH}
+    if t == "top_loss_orders":
+        try:
+            n = int(str(out.get("n") or 10).strip())
+        except ValueError:
+            return None
+        return t, {"event": ev, "n": max(1, min(50, n)), "depth": DEFAULT_DEPTH}
     if t == "rescue_first":
         return t, {"event": ev, "depth": DEFAULT_DEPTH}
     if t == "weak_points":
@@ -247,6 +272,8 @@ def read_as(template: str, p: dict, ctx: dict) -> str:
     if template == "at_risk":
         s = f"Orders that will be late because of: {ev.get('name')} ({ev.get('when')})"
         return s + (f", customers in {p['city']}" if p.get("city") else "")
+    if template == "top_loss_orders":
+        return f"The {p['n']} late orders with the biggest late fees because of: {ev.get('name')} ({ev.get('when')})"
     if template == "orders_window":
         from .questions import _day
         return f"Orders from customers in {p['city']}, promised between {_day(p['from_day'])} and {_day(p['to_day'])}"
@@ -273,6 +300,7 @@ def interpret(question: str, g, ctx: dict) -> tuple[str, dict, str]:
     hit = gemini(question, v)
     if hit:
         return hit[0], hit[1], "gemini"
-    raise NotUnderstood("I can answer questions about late orders, why an order is late, what to rescue first, "
+    raise NotUnderstood("I can answer questions about late orders, the costliest late orders, why an order is late, "
+                        "what to rescue first, "
                         "which places everything depends on, routes around a closed port, and orders due in a "
                         "date range.")

@@ -1,6 +1,6 @@
 # Task board
 
-Updated Oct 17 (day 3), just after midnight. Full state and gotchas: [`HANDOFF.md`](../HANDOFF.md). Deadline: **Oct 18, 23:59 IST; submit by the evening, not at 23:50.**
+Updated Oct 18 (day 4). Full state and gotchas: [`HANDOFF.md`](../HANDOFF.md). Deadline: **Oct 18, 23:59 IST; submit by the evening, not at 23:50.**
 
 ## Done
 
@@ -20,6 +20,13 @@ Updated Oct 17 (day 3), just after midnight. Full state and gotchas: [`HANDOFF.m
   profile `app`, data loads on first start; checked from empty volumes); README final pass (status,
   quick start incl. frontend, screenshots, architecture, bug section, rules checklist); bug report
   checked against open issues; blog post draft (`docs/blog-post.md`).
+* Oct 17, afternoon (Shyam): the three Track 2 features (memory influence, with vs without memory, live
+  agent timeline), the new console UI, FalkorDB bug C worked around, recall fixed to earlier events only;
+  31 tests. Details in [`HANDOFF.md`](../HANDOFF.md).
+* Oct 18 (Shyam): query-driven console (no graph until you ask; each answer drawn as only its own
+  entities, ranked, folded past ~25), engine switch in the top bar, design tokens with the team palette,
+  new `top_loss_orders` template with SQL twin and parity tests, story orders linked to a delayed feeder;
+  39 tests, parity and concurrency pass, Docker image builds and serves. README screenshots retaken.
 
 ## Day 3 (Oct 17): put a name on each line at standup
 

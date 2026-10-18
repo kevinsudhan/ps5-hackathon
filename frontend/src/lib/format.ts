@@ -1,6 +1,7 @@
 // Formatting and plain-English wording only. Nothing here computes a business number.
 
 import type { AgentName, Engine, NodeKind, Tone } from '../api/types'
+import { rgb, token } from './theme'
 
 const usd0 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 const int = new Intl.NumberFormat('en-US')
@@ -22,16 +23,48 @@ export function monthYear(iso: string) {
 }
 
 export const ENGINE_NAME: Record<Engine, string> = { falkordb: 'FalkorDB', postgres: 'PostgreSQL' }
-/** Validated pair (dataviz categorical slots 1 and 2, light surface). Used for engines everywhere. */
-export const ENGINE_COLOR: Record<Engine, string> = { falkordb: '#2a78d6', postgres: '#eb6834' }
-
-export const TONE_COLOR: Record<Tone, string> = {
-  danger: '#d03b3b',
-  warning: '#e8a01c',
-  good: '#1f9d5c',
-  neutral: '#6b7a90',
-  muted: '#c3c7cf',
+/** Engine identity. FalkorDB is the primary engine. */
+export const ENGINE_COLOR: Record<Engine, string> = {
+  get falkordb() { return token('--engine-falkor') }, get postgres() { return token('--engine-pg') },
 }
+
+/** Semantic only: closed / late, delayed, on track, other. Read from the design tokens. */
+const TONE_TOKEN: Record<Tone, string> = {
+  danger: '--danger', warning: '--delayed', good: '--ok', neutral: '--other', muted: '--mauve',
+}
+export const TONE_COLOR: Record<Tone, string> = {
+  get danger() { return token(TONE_TOKEN.danger) }, get warning() { return token(TONE_TOKEN.warning) },
+  get good() { return token(TONE_TOKEN.good) }, get neutral() { return token(TONE_TOKEN.neutral) },
+  get muted() { return token(TONE_TOKEN.muted) },
+}
+/** The same tones as "r, g, b" for translucent fills and strokes. */
+export const TONE_RGB: Record<Tone, string> = {
+  get danger() { return rgb(TONE_COLOR.danger) }, get warning() { return rgb(TONE_COLOR.warning) },
+  get good() { return rgb(TONE_COLOR.good) }, get neutral() { return rgb(TONE_COLOR.neutral) },
+  get muted() { return rgb(TONE_COLOR.muted) },
+}
+/** Text-safe tone colours (AA on indigo surfaces): coral text uses its lighter tint. */
+export const TONE_TEXT: Record<Tone, string> = {
+  get danger() { return token('--danger-text') }, get warning() { return token('--delayed') },
+  get good() { return token('--ok') }, get neutral() { return token('--text-2') }, get muted() { return token('--text-2') },
+}
+/** Graph surfaces for code that cannot read CSS variables (three.js). */
+export const GRAPH = {
+  get stage() { return token('--bg') }, get card() { return token('--indigo') }, get ink() { return token('--text') },
+  get ink2() { return token('--text-2') }, get ink3() { return token('--text-2') }, get quiet() { return token('--purple') },
+  get line() { return token('--purple') }, get lineHover() { return token('--mauve') }, get select() { return token('--text') },
+  get flow() { return token('--periwinkle') }, get cardQuiet() { return token('--bg-deep') },
+}
+
+/** "Reroute 3 shipments by sea" / "Air-freight 5 shipments" / "No rescue": the same words as the backend. */
+export function recommendation(p: { roots: number; by_air: number; by_sea: number }) {
+  if (!p.roots) return 'No rescue: inform affected customers'
+  const n = (k: number) => `${k} shipment${k === 1 ? '' : 's'}`
+  if (p.by_air && !p.by_sea) return `Air-freight ${n(p.by_air)}`
+  if (p.by_sea && !p.by_air) return `Reroute ${n(p.by_sea)} by sea`
+  return `Reroute ${p.by_sea} by sea, air-freight ${p.by_air}`
+}
+export const pct = (r: number) => `${Math.round(r * 100)}%`
 
 const KIND_WORD: Record<NodeKind, string> = {
   event: 'Disruption', port: 'Port', airport: 'Airport', place: 'Place', warehouse: 'Warehouse',

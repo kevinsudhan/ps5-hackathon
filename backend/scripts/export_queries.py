@@ -55,6 +55,10 @@ SECTIONS = [
      "Template `at_risk`. Like Q1, plus the shipment at the start of each order's worst delay path. "
      "The engine switch runs either version; tests/test_questions.py checks they return the same rows.",
      qs.AT_RISK_CYPHER.format(depth=8), [("prompt-box twin", qs.AT_RISK_SQL)]),
+    ("P1b. Prompt box: the N costliest late orders",
+     "Template `top_loss_orders` (\"10 most loss-inducing orders\"): the at-risk cascade ranked by late fee, ties by "
+     "promise id in both engines; N is a validated slot from 1 to 50.",
+     qs.TOP_LOSS_CYPHER.format(depth=8), [("prompt-box twin", qs.TOP_LOSS_SQL)]),
     ("P2. Prompt box: orders from one city due between two dates",
      "Template `orders_window`.", qs.WINDOW_CYPHER, [("prompt-box twin", qs.WINDOW_SQL)]),
     ("P3. Prompt box: why one customer's order is late",
@@ -65,9 +69,17 @@ SECTIONS = [
      "and its outcome. The Sentinel posts it; it is shown on every run.",
      memory.RECALL, []),
     ("M2. Playbooks (procedural)",
-     "Learned rules with use and success counts. Finance reads them: a playbook that failed before "
-     "(air-freighting full containers) rules that option out today.",
+     "Learned habits with use and success counts, for this kind of event (or any event).",
      memory.PLAYBOOKS, []),
+    ("M3. Track record of a learned habit",
+     "Every past plan that followed the habit, with the saving it expected when it was approved and the saving its "
+     "real outcome delivered. Finance scales today's estimate for options of the same kind by actual / expected "
+     "(air freight for full containers: 28%), so memory corrects estimates instead of banning options.",
+     memory.TRACK_RECORD, []),
+    ("M4. Memory influence on a run",
+     "Which learned habits a run's plan applied (`USED_MEMORY`, effect `changed` or `checked`) and where each was "
+     "learned: the past run, its event and its real outcome. Drives the Memory influence card.",
+     memory.INFLUENCE, []),
 ]
 
 MEMORY_WRITES = """## Memory writes (shared state and handoffs)
@@ -82,6 +94,9 @@ Every agent writes through `backend/promisegraph/memory.py`:
 * `choose_options`: `(:Decision)-[:CHOOSES]->(:RouteOption)`
 * `set_decision_status`: `(:Decision)-[:APPROVED_BY|REJECTED_BY]->(:Person)`
 * `record_outcome`, `upsert_playbook`: `(:Decision)-[:RESULTED_IN]->(:Outcome)`, `(:Decision)-[:FOLLOWED]->(:Playbook)`
+* `link_memory_use`: `(:Decision)-[:USED_MEMORY {realization, effect}]->(:Playbook)`
+* `create_run(..., counterfactual_of=...)`: `(:Run {memory: 'off'})-[:COUNTERFACTUAL_OF]->(:Run)` (the run without memory)
+* `mark_step`: `Decision.ms`, how long the agent step that wrote it took (the live timeline)
 
 The next agent reads the previous agent's output from these nodes (for example the Rerouter reads
 `(:Decision {kind:'impact'})-[:FOUND]->(:Cluster)-[:ROOT]->(:Shipment)`), never from Python variables.

@@ -247,8 +247,10 @@ BIZ_SUFFIX = {"NL": "BV", "DE": "GmbH", "BE": "BV", "FR": "SARL", "IT": "S.r.l."
 EVENTS = [  # id, type, name, start, end, backlog_days, hubs, historic
     ("EV-SGSIN-1020", "port_closure", "Singapore terminals shut by cyber incident",
      date(2026, 10, 20), date(2026, 10, 24), 3, ["SGSIN"], False),
+    # Runs into Thanksgiving week, so late orders are expensive: on paper, air-freighting the stuck
+    # containers pays off. This is the scenario where memory (the Suez air-freight outcome) changes the plan.
     ("EV-USWC-1120", "labour_action", "LA / Long Beach labour action",
-     date(2026, 11, 20), date(2026, 11, 24), 4, ["USLAX", "USLGB"], False),
+     date(2026, 11, 20), date(2026, 11, 30), 6, ["USLAX", "USLGB"], False),
     ("EV-MYPKG-0608", "port_closure", "Port Klang congestion closes gates",
      date(2026, 6, 8), date(2026, 6, 12), 3, ["MYPKG"], True),
     ("EV-LKCMB-0420", "port_closure", "Colombo crane outage",

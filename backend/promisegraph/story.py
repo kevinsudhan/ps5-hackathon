@@ -68,9 +68,11 @@ def story(g, event_id: str, ctx: dict) -> dict:
 
     ranked = sorted(rows, key=lambda r: (who[r[0]]["customer"] != persona_name, -r[6], r[0]))
     shown = ranked[:ORDER_CAP]
+    # link each order to a delayed transfer that feeds its last mile (not just the first one by id,
+    # which may be on time and not drawn)
     feeders = dict(g.query("UNWIND $ids AS x MATCH (lm:Shipment {id: x}) WITH lm "
-                           "MATCH (t:Shipment)-[:FEEDS]->(lm) WHERE t.stage = 'transfer' RETURN lm.id, min(t.id)",
-                           {"ids": [r[2] for r in shown]}).result_set)
+                           "MATCH (t:Shipment)-[:FEEDS]->(lm) WHERE t.stage = 'transfer' AND t.id IN $bb RETURN lm.id, min(t.id)",
+                           {"ids": [r[2] for r in shown], "bb": backbone}).result_set)
     for r in shown:
         d = who[r[0]]
         nodes[r[0]] = {"id": r[0], "kind": "order", "label": f"{d['customer']}'s order", "tone": "danger", "size": 1,
@@ -111,9 +113,13 @@ def story(g, event_id: str, ctx: dict) -> dict:
     }
 
 
-def chips(g, ctx: dict) -> list[dict]:
-    """Six suggestions with real values that return results for this company."""
-    event = next((e for e in ctx["events"] if "SGSIN" in e), sorted(ctx["events"])[0])
+def chips(g, ctx: dict, event: str | None = None) -> list[dict]:
+    """Suggestions with real values that return results for this company, about one disruption
+    (Singapore by default). Questions about another disruption name it, so they are read as such."""
+    default = next((e for e in ctx["events"] if "SGSIN" in e), sorted(ctx["events"])[0])
+    event = event if event in ctx["events"] else default
+    if event != default:
+        return _event_chips(g, ctx, event)
     port_short = "Singapore" if "SGSIN" in event else ctx["hubs"][ctx["events"][event]["hubs"][0]]
     rows = fs.cascade(g, event, 8)
     who = fs.promise_details(g, [r[0] for r in rows])
@@ -122,21 +128,9 @@ def chips(g, ctx: dict) -> list[dict]:
         worst = max(rows, key=lambda r: (r[4], r[5], r[0]))
         persona = who[worst[0]]["customer"]
 
-    # a city and a 7-day window with plenty of orders due
-    due = g.query("MATCH (c:Customer)-[:PLACED]->(:Order)-[:HAS_PROMISE]->(p:Promise {status: 'active'}) "
-                  "RETURN c.city, p.due_day").result_set
-    city = "Miami" if any(c == "Miami" for c, _ in due) else Counter(c for c, _ in due).most_common(1)[0][0]
-    days = Counter(d for c, d in due if c == city)
-    week = lambda d: sum(days.get(d + i, 0) for i in range(7))  # noqa: E731
-    dec1 = to_day(date(TODAY.year, 12, 1))
-    # Prefer an easy-to-say window (Dec 1-7) when it has orders, else the busiest week.
-    start = dec1 if week(dec1) else max(days, key=lambda d: (week(d), -d))
-    a, b = to_date(start), to_date(start + 6)
-
     out = [
         {"label": f"Orders at risk from {port_short}", "question": f"Which orders are at risk because {port_short} closed?"},
-        {"label": f"{city} orders, {a.strftime('%b')} {a.day}-{b.day}" if a.month == b.month else f"{city} orders due soon",
-         "question": f"Show orders from {city} customers due between {a.strftime('%b')} {a.day} and {b.strftime('%b')} {b.day}"},
+        {"label": "10 most loss-inducing orders", "question": "Show the 10 most loss-inducing orders"},
     ]
     if persona:
         short = persona.split()[0] if len(persona.split()) == 2 else persona
@@ -146,5 +140,39 @@ def chips(g, ctx: dict) -> list[dict]:
         {"label": "Places everything depends on", "question": "Which ports does everything depend on?"},
         {"label": f"A way around {port_short}",
          "question": f"How do we get goods from Ho Chi Minh City to Venlo without {port_short}?"},
+        _window_chip(g),
     ]
+    return out
+
+
+def _window_chip(g) -> dict:
+    """A city and a 7-day window with plenty of orders due."""
+    due = g.query("MATCH (c:Customer)-[:PLACED]->(:Order)-[:HAS_PROMISE]->(p:Promise {status: 'active'}) "
+                  "RETURN c.city, p.due_day").result_set
+    city = "Miami" if any(c == "Miami" for c, _ in due) else Counter(c for c, _ in due).most_common(1)[0][0]
+    days = Counter(d for c, d in due if c == city)
+    week = lambda d: sum(days.get(d + i, 0) for i in range(7))  # noqa: E731
+    dec1 = to_day(date(TODAY.year, 12, 1))
+    # Prefer an easy-to-say window (Dec 1-7) when it has orders, else the busiest week.
+    start = dec1 if week(dec1) else max(days, key=lambda d: (week(d), -d))
+    a, b = to_date(start), to_date(start + 6)
+    return {"label": f"{city} orders, {a.strftime('%b')} {a.day}-{b.day}" if a.month == b.month else f"{city} orders due soon",
+            "question": f"Show orders from {city} customers due between {a.strftime('%b')} {a.day} and {b.strftime('%b')} {b.day}"}
+
+
+def _event_chips(g, ctx: dict, event: str) -> list[dict]:
+    """Chips about a disruption other than the default one; every question names it."""
+    ev = ctx["events"][event]
+    name = ev["name"]
+    rows = fs.cascade(g, event, 8)
+    out = [{"label": "Orders at risk", "question": f"Which orders are at risk because of the {name}?"}]
+    if rows:
+        who = fs.promise_details(g, [r[0] for r in rows])
+        worst = max(rows, key=lambda r: (r[6], r[0]))
+        persona = who[worst[0]]["customer"]
+        short = persona.split()[0] if len(persona.split()) == 2 else persona
+        out += [{"label": "10 most loss-inducing orders", "question": f"Show the 10 most loss-inducing orders from the {name}"},
+                {"label": f"Why is {short}'s order late?", "question": f"Why is {persona}'s order late after the {name}?"},
+                {"label": "What to rescue first", "question": f"Which shipments should we rescue first after the {name}?"}]
+    out += [{"label": "Places everything depends on", "question": "Which ports does everything depend on?"}, _window_chip(g)]
     return out

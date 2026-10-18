@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { getSweep, type Loaded } from '../api/client'
 import type { Engine, Sweep, SweepPoint } from '../api/types'
-import { ENGINE_COLOR, ENGINE_NAME, ms, num } from '../lib/format'
+import { ENGINE_COLOR, ENGINE_NAME, ms, num, GRAPH } from '../lib/format'
 import { useLoad } from '../lib/useLoad'
 
 // Sweeps take seconds to time; keep each one for the session.
@@ -48,7 +48,7 @@ export function Benchmark({ tenant, tenants, eventId }: Props) {
         <>
           <Chart points={s.points} depth={depth} onDepth={setDepth} />
           {/* lined up with the chart's plot area (viewBox 480: 44 left, 84 right) */}
-          <div style={{ padding: '0 17.5% 0 9.2%', marginTop: -6 }}>
+          <div style={{ padding: '0 17.5% 0 11.25%', marginTop: -6 }}>
             <input className="slider" type="range" min={2} max={8} step={1} value={depth}
               onChange={e => setDepth(Number(e.target.value))} aria-label="Steps followed along the supply chain" />
           </div>
@@ -77,7 +77,7 @@ export function Benchmark({ tenant, tenants, eventId }: Props) {
 
 function Chart({ points, depth, onDepth }: { points: SweepPoint[]; depth: number; onDepth: (d: number) => void }) {
   const [hover, setHover] = useState<number | null>(null)
-  const W = 480, H = 250, M = { l: 44, r: 84, t: 30, b: 36 }
+  const W = 480, H = 250, M = { l: 54, r: 84, t: 30, b: 36 }
   const iw = W - M.l - M.r, ih = H - M.t - M.b
   const { yMax, ticks } = useMemo(() => {
     const top = Math.max(1, ...points.flatMap(p => [p.falkordb_ms, p.postgres_ms]))
@@ -113,24 +113,24 @@ function Chart({ points, depth, onDepth }: { points: SweepPoint[]; depth: number
       >
         {ticks.map(t => (
           <g key={t}>
-            <line x1={M.l} x2={M.l + iw} y1={y(t)} y2={y(t)} stroke="#ebe9e4" strokeWidth={1} />
-            <text x={M.l - 8} y={y(t) + 4} textAnchor="end" fontSize={11} fill="#8a8883">{t} ms</text>
+            <line x1={M.l} x2={M.l + iw} y1={y(t)} y2={y(t)} stroke={GRAPH.line} strokeWidth={1} />
+            <text x={M.l - 8} y={y(t) + 4} textAnchor="end" fontSize={11} fill={GRAPH.ink3}>{t} ms</text>
           </g>
         ))}
         {points.map(p => (
-          <text key={p.depth} x={x(p.depth)} y={M.t + ih + 18} textAnchor="middle" fontSize={11.5} fill={p.depth === depth ? '#1b1b1a' : '#8a8883'} fontWeight={p.depth === depth ? 650 : 400}>{p.depth}</text>
+          <text key={p.depth} x={x(p.depth)} y={M.t + ih + 18} textAnchor="middle" fontSize={11.5} fill={p.depth === depth ? GRAPH.ink : GRAPH.ink3} fontWeight={p.depth === depth ? 650 : 400}>{p.depth}</text>
         ))}
-        <text x={M.l + iw / 2} y={H - 2} textAnchor="middle" fontSize={11.5} fill="#52514e">steps followed along the supply chain</text>
-        <line x1={x(shown)} x2={x(shown)} y1={M.t - 6} y2={M.t + ih} stroke="#1b1b1a" strokeOpacity={hover != null ? 0.25 : 0.45} strokeDasharray="3 3" />
+        <text x={M.l + iw / 2} y={H - 2} textAnchor="middle" fontSize={11.5} fill={GRAPH.ink2}>steps followed along the supply chain</text>
+        <line x1={x(shown)} x2={x(shown)} y1={M.t - 6} y2={M.t + ih} stroke={GRAPH.ink} strokeOpacity={hover != null ? 0.25 : 0.45} strokeDasharray="3 3" />
         {(['postgres_ms', 'falkordb_ms'] as const).map(k => (
           <path key={k} d={line(k)} fill="none" stroke={ENGINE_COLOR[k === 'falkordb_ms' ? 'falkordb' : 'postgres']} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         ))}
         {points.map(p => (['postgres_ms', 'falkordb_ms'] as const).map(k => (
           <circle key={`${k}${p.depth}`} cx={x(p.depth)} cy={y(p[k])} r={p.depth === shown ? 5 : 4}
-            fill={ENGINE_COLOR[k === 'falkordb_ms' ? 'falkordb' : 'postgres']} stroke="#fff" strokeWidth={2} />
+            fill={ENGINE_COLOR[k === 'falkordb_ms' ? 'falkordb' : 'postgres']} stroke={GRAPH.stage} strokeWidth={2} />
         )))}
-        <text x={x(8) + 12} y={fy + 4} fontSize={12} fill="#1b1b1a" fontWeight={600}>FalkorDB</text>
-        <text x={x(8) + 12} y={py + 4} fontSize={12} fill="#1b1b1a" fontWeight={600}>PostgreSQL</text>
+        <text x={x(8) + 12} y={fy + 4} fontSize={12} fill={GRAPH.ink} fontWeight={600}>FalkorDB</text>
+        <text x={x(8) + 12} y={py + 4} fontSize={12} fill={GRAPH.ink} fontWeight={600}>PostgreSQL</text>
       </svg>
       {hover != null && sp && (
         <div className="viz-tip" style={{ left: `${(x(shown) / W) * 100}%`, top: 34, transform: 'translateX(-50%)' }}>
